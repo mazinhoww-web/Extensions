@@ -3,8 +3,11 @@
 // Removes duplicates, normalizes text, and produces a clean unified transcript.
 
 export function normalizeTranscript(captionChunks, geminiTranscript = null) {
-  // Step 1: Deduplicate caption chunks
-  const deduped = deduplicateChunks(captionChunks);
+  // Step 1: Remove cross-source duplicates for hybrid meetings (platform + room mic)
+  const hybridDeduped = deduplicateHybridChunks(captionChunks);
+
+  // Step 2: Deduplicate caption chunks (incremental platform updates)
+  const deduped = deduplicateChunks(hybridDeduped);
 
   // Step 2: If Gemini transcript is available, merge it
   if (geminiTranscript) {
@@ -158,6 +161,40 @@ function alignSegments(captionChunks, geminiSegments) {
   }
 
   return result;
+}
+
+// ─── Hybrid deduplication ─────────────────────────────────────────────────────
+// In hybrid meetings, a room participant who is also connected to the platform
+// will appear in both sources: platform captions (real name) and room mic ("Sala - Falante X").
+// Remove room-mic chunks that are duplicates of nearby platform caption chunks.
+
+function deduplicateHybridChunks(chunks) {
+  if (!chunks || chunks.length === 0) return chunks;
+
+  const hasRoomSource = chunks.some((c) => c.source === 'room');
+  const hasPlatformSource = chunks.some((c) => c.source !== 'room' && c.source !== 'mic');
+  if (!hasRoomSource || !hasPlatformSource) return chunks;
+
+  const TIME_WINDOW_MS = 6000;
+  const SIM_THRESHOLD = 0.6;
+
+  const platformChunks = chunks.filter((c) => c.source !== 'room');
+  const roomChunks = chunks.filter((c) => c.source === 'room');
+
+  const filteredRoom = roomChunks.filter((roomChunk) => {
+    const nearby = platformChunks.filter(
+      (pc) => Math.abs(pc.timestamp - roomChunk.timestamp) < TIME_WINDOW_MS
+    );
+    const isDuplicate = nearby.some(
+      (pc) => levenshteinSimilarity(
+        pc.text.toLowerCase().slice(0, 120),
+        roomChunk.text.toLowerCase().slice(0, 120)
+      ) > SIM_THRESHOLD
+    );
+    return !isDuplicate;
+  });
+
+  return [...platformChunks, ...filteredRoom].sort((a, b) => a.timestamp - b.timestamp);
 }
 
 // ─── Text cleaning ────────────────────────────────────────────────────────────

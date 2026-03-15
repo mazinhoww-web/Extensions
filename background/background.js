@@ -132,6 +132,22 @@ async function handleMessage(msg, sender) {
   switch (msg.type) {
     case 'START_MEETING': {
       const platform = msg.platform || 'mic';
+      // Check if a meeting is already active (e.g. platform content script started it,
+      // then hybrid mic activation arrives — don't overwrite, just promote to 'hybrid')
+      const existing = await getCurrentMeeting();
+      if (existing && !existing.endTime) {
+        if (platform !== existing.platform && platform !== 'mic') {
+          // Different platform source joined — shouldn't happen normally
+        } else if (platform === 'mic' && existing.platform !== 'mic') {
+          // Mic source joining an existing platform meeting → promote to hybrid
+          existing.platform = 'hybrid';
+          await chrome.storage.local.set({ currentMeeting: existing });
+          notifyPopup({ type: 'MEETING_STARTED', meeting: existing });
+          return { success: true, meeting: existing };
+        }
+        // Same platform or already hybrid — return existing meeting
+        return { success: true, meeting: existing };
+      }
       const meeting = await startMeeting(platform, msg.title);
       // Notify any open popup
       notifyPopup({ type: 'MEETING_STARTED', meeting });

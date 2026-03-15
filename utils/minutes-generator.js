@@ -24,7 +24,7 @@ function buildPrompt(meeting, normalizedTranscript) {
   const speakers = [...new Set((normalizedTranscript || []).map((c) => c.speaker))];
   const speakerList = speakers.length > 0 ? speakers.join(', ') : 'Não identificados';
 
-  return `Você é um assistente especializado em redigir atas de reunião corporativas em português brasileiro formal.
+  return `Você é um assistente especializado em redigir atas de reunião corporativas.
 
 Analise a transcrição a seguir e gere uma ata completa e detalhada.
 
@@ -43,11 +43,13 @@ ${transcriptText}
 ---
 
 INSTRUÇÕES PARA A ATA:
-1. Redija em português brasileiro formal e objetivo.
+1. Detecte automaticamente o(s) idioma(s) presente(s) na transcrição.
+   - Se toda a reunião for em um único idioma, redija a ata inteiramente nesse idioma.
+   - Se houver múltiplos idiomas, redija a ata no idioma predominante, mas registre fielmente o que cada participante disse, indicando entre parênteses o idioma original quando diferente (ex: "Falante disse em inglês: '...'").
 2. Agrupe os assuntos discutidos por TEMA, não cronologicamente.
 3. Capture TODAS as decisões tomadas, mesmo que implícitas na conversa.
 4. Liste próximos passos com o responsável quando identificável.
-5. Se um falante não foi identificado pelo nome, use o identificador da transcrição (ex: Falante 1).
+5. Se um falante não foi identificado pelo nome, use o identificador da transcrição (ex: Falante 1 ou Sala - Falante 1 para presenciais).
 6. Seja preciso: não adicione informações que não estão na transcrição.
 
 Gere a ata com EXATAMENTE as seguintes seções em Markdown:
@@ -85,6 +87,7 @@ function platformLabel(platform) {
     'google-meet': 'Google Meet',
     teams: 'Microsoft Teams',
     mic: 'Presencial (Modo Sala)',
+    hybrid: 'Modo Híbrido (Sala + Remotos)',
   };
   return labels[platform] || platform;
 }
@@ -178,7 +181,8 @@ export async function transcribeAudioWithGemini(apiKey, audioBlobs, captionTrans
       ? `\n\nContexto das legendas capturadas (para referência de speaker labels):\n${formatTranscriptForPrompt(captionTranscript)}`
       : '';
 
-    const prompt = `Transcreva este áudio de reunião em português brasileiro.
+    const prompt = `Transcreva este áudio de reunião.
+Detecte automaticamente o idioma falado. Se houver múltiplos idiomas, transcreva cada trecho no idioma em que foi dito.
 Identifique cada falante diferente como "Falante 1", "Falante 2", etc., baseando-se em diferenças de voz.
 ${captionContext}
 Formato de saída — uma linha por trecho de fala:

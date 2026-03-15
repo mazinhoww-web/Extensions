@@ -111,14 +111,24 @@ async function detectPlatforms() {
     const url = tab.url;
     const meetEl = document.getElementById('meetStatus');
     const teamsEl = document.getElementById('teamsStatus');
+    const hybridToggle = document.getElementById('hybridModeToggle');
 
-    if (url.includes('meet.google.com')) {
+    const onMeet = url.includes('meet.google.com');
+    const onTeams = url.includes('teams.microsoft.com') || url.includes('teams.live.com');
+
+    if (onMeet) {
       meetEl.textContent = 'Detectado ✓';
       meetEl.className = 'platform-status detected';
     }
-    if (url.includes('teams.microsoft.com') || url.includes('teams.live.com')) {
+    if (onTeams) {
       teamsEl.textContent = 'Detectado ✓';
       teamsEl.className = 'platform-status detected';
+    }
+
+    // Auto-select platform tab and pre-check hybrid mode when on a meeting platform
+    if (onMeet || onTeams) {
+      setMode('platform');
+      if (hybridToggle) hybridToggle.checked = true;
     }
   } catch (_) {}
 }
@@ -136,22 +146,24 @@ async function checkApiKey() {
 // ─── Start recording (platform mode) ─────────────────────────────────────────
 
 async function startPlatformRecording() {
+  const isHybrid = document.getElementById('hybridModeToggle')?.checked;
+  if (isHybrid) return startHybridRecording();
+
   try {
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
     if (!tab) return alert('Nenhuma aba ativa encontrada.');
 
     const url = tab.url || '';
-    let msgType = null;
+    const isMeetingUrl = url.includes('meet.google.com') ||
+      url.includes('teams.microsoft.com') || url.includes('teams.live.com');
 
-    if (url.includes('meet.google.com')) msgType = 'MEETSCRIBE_ACTIVATE';
-    else if (url.includes('teams.microsoft.com') || url.includes('teams.live.com')) msgType = 'MEETSCRIBE_ACTIVATE';
-    else {
+    if (!isMeetingUrl) {
       alert('Acesse uma reunião no Google Meet ou Microsoft Teams primeiro, depois clique em Iniciar.');
       return;
     }
 
     // Send activation message to content script
-    await chrome.tabs.sendMessage(tab.id, { type: msgType });
+    await chrome.tabs.sendMessage(tab.id, { type: 'MEETSCRIBE_ACTIVATE' });
 
     // Background has already received START_MEETING from content script
     const { meeting: m } = await chrome.runtime.sendMessage({ type: 'GET_CURRENT_MEETING' });
@@ -161,6 +173,45 @@ async function startPlatformRecording() {
     enterRecordingView(meeting);
   } catch (err) {
     alert(`Erro ao iniciar: ${err.message}\n\nCertifique-se de estar em uma reunião ativa.`);
+  }
+}
+
+// ─── Start recording (hybrid mode: platform captions + room mic) ──────────────
+
+async function startHybridRecording() {
+  try {
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    if (!tab) return alert('Nenhuma aba ativa encontrada.');
+
+    const url = tab.url || '';
+    const isMeetingUrl = url.includes('meet.google.com') ||
+      url.includes('teams.microsoft.com') || url.includes('teams.live.com');
+
+    if (!isMeetingUrl) {
+      alert('Acesse uma reunião no Google Meet ou Microsoft Teams primeiro, depois clique em Iniciar.');
+      return;
+    }
+
+    // Step 1: activate platform caption scraping (content script sends START_MEETING)
+    await chrome.tabs.sendMessage(tab.id, { type: 'MEETSCRIBE_ACTIVATE' });
+
+    // Brief wait for background to register the meeting before injecting mic
+    await new Promise((r) => setTimeout(r, 600));
+
+    // Step 2: inject and activate mic-fallback in hybrid mode (no new START_MEETING)
+    await chrome.scripting.executeScript({
+      target: { tabId: tab.id },
+      files: ['content/mic-fallback.js'],
+    });
+    await chrome.tabs.sendMessage(tab.id, { type: 'MEETSCRIBE_ACTIVATE_MIC', hybridMode: true });
+
+    const { meeting: m } = await chrome.runtime.sendMessage({ type: 'GET_CURRENT_MEETING' });
+    meeting = m;
+    captionChunks = [];
+
+    enterRecordingView(meeting);
+  } catch (err) {
+    alert(`Erro ao iniciar modo híbrido: ${err.message}\n\nCertifique-se de estar em uma reunião ativa e ter concedido permissão de microfone.`);
   }
 }
 
@@ -206,7 +257,7 @@ function enterRecordingView(m) {
   setHeaderBadge('● Gravando', 'recording');
 
   const meta = document.getElementById('recordingMeta');
-  const platformLabels = { 'google-meet': 'Google Meet', teams: 'Teams', mic: 'Modo Sala' };
+  const platformLabels = { 'google-meet': 'Google Meet', teams: 'Teams', mic: 'Modo Sala', hybrid: 'Modo Híbrido' };
   if (meta) {
     meta.innerHTML = `${platformLabels[m?.platform] || 'Reunião'} · <span class="timer" id="timerDisplay">00:00</span>`;
   }
@@ -229,14 +280,19 @@ async function stopAndGenerate() {
     const { meeting: endedMeeting } = await chrome.runtime.sendMessage({ type: 'END_MEETING' });
     meeting = endedMeeting || meeting;
 
-    // Deactivate content script
+    // Deactivate content script(s)
     try {
       const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
       if (tab) {
-        const deactivateMsg = meeting?.platform === 'mic'
-          ? 'MEETSCRIBE_DEACTIVATE_MIC'
-          : 'MEETSCRIBE_DEACTIVATE';
-        await chrome.tabs.sendMessage(tab.id, { type: deactivateMsg }).catch(() => {});
+        const platform = meeting?.platform;
+        if (platform === 'hybrid') {
+          // Hybrid: deactivate both platform captions and mic
+          await chrome.tabs.sendMessage(tab.id, { type: 'MEETSCRIBE_DEACTIVATE' }).catch(() => {});
+          await chrome.tabs.sendMessage(tab.id, { type: 'MEETSCRIBE_DEACTIVATE_MIC' }).catch(() => {});
+        } else {
+          const deactivateMsg = platform === 'mic' ? 'MEETSCRIBE_DEACTIVATE_MIC' : 'MEETSCRIBE_DEACTIVATE';
+          await chrome.tabs.sendMessage(tab.id, { type: deactivateMsg }).catch(() => {});
+        }
       }
     } catch (_) {}
 
@@ -323,7 +379,7 @@ async function loadHistory() {
       const dur = m.endTime
         ? `${Math.round((m.endTime - m.startTime) / 60000)} min`
         : '—';
-      const platform = { 'google-meet': 'Meet', teams: 'Teams', mic: 'Sala' }[m.platform] || m.platform;
+      const platform = { 'google-meet': 'Meet', teams: 'Teams', mic: 'Sala', hybrid: 'Híbrido' }[m.platform] || m.platform;
       return `<div class="history-item" data-id="${m.id}">
         <div>
           <div class="h-title">${escapeHtml(m.title || 'Reunião sem título')}</div>

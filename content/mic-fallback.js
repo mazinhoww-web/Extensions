@@ -10,6 +10,8 @@
   // ─── State ─────────────────────────────────────────────────────────────────
 
   let isActive = false;
+  let isHybridMode = false;
+  let speakerPrefix = null; // e.g. 'Sala' in hybrid mode
   let recognition = null;
   let audioProcessor = null;
   let currentSpeakerIndex = 1;
@@ -34,7 +36,7 @@
   }
 
   function currentSpeaker() {
-    return `Falante ${currentSpeakerIndex}`;
+    return speakerPrefix ? `${speakerPrefix} - Falante ${currentSpeakerIndex}` : `Falante ${currentSpeakerIndex}`;
   }
 
   // ─── Web Speech API setup ───────────────────────────────────────────────────
@@ -51,7 +53,7 @@
     const rec = new SpeechRecognition();
     rec.continuous = true;
     rec.interimResults = true;
-    rec.lang = 'pt-BR';
+    rec.lang = ''; // auto-detect language from browser/OS settings
     rec.maxAlternatives = 1;
 
     rec.onstart = () => {
@@ -73,6 +75,7 @@
               text,
               timestamp: Date.now(),
               platform: 'mic',
+              source: isHybridMode ? 'room' : 'mic',
               confidence: result[0].confidence,
             };
             finalTranscriptBuffer.push(chunk);
@@ -202,10 +205,11 @@
       min-width: 220px;
       max-width: 320px;
     `;
+    const title = isHybridMode ? 'MeetScribe — Microfone Sala' : 'MeetScribe — Modo Sala';
     overlayEl.innerHTML = `
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
         <span style="width:8px;height:8px;border-radius:50%;background:#ff4444;display:inline-block;animation:ms-pulse2 1.5s infinite;flex-shrink:0;"></span>
-        <strong>MeetScribe — Modo Sala</strong>
+        <strong>${title}</strong>
       </div>
       <div class="ms-status" style="font-size:12px;color:#ccc;">Ouvindo...</div>
       <div class="ms-last" style="margin-top:6px;font-size:11px;color:#aaa;font-style:italic;max-height:40px;overflow:hidden;"></div>
@@ -229,19 +233,25 @@
 
   // ─── Activate / Deactivate ──────────────────────────────────────────────────
 
-  async function activate() {
+  async function activate(options = {}) {
     if (isActive) return;
     isActive = true;
+    isHybridMode = options.hybridMode === true;
+    speakerPrefix = options.speakerPrefix || (isHybridMode ? 'Sala' : null);
     currentSpeakerIndex = 1;
     speakerCount = 1;
     finalTranscriptBuffer = [];
     lastSpeechTime = Date.now();
 
-    await chrome.runtime.sendMessage({
-      type: 'START_MEETING',
-      platform: 'mic',
-      title: `Reunião — Modo Sala ${new Date().toLocaleDateString('pt-BR')}`,
-    }).catch(() => {});
+    if (!isHybridMode) {
+      // Standalone mic mode: create a new meeting in background
+      await chrome.runtime.sendMessage({
+        type: 'START_MEETING',
+        platform: 'mic',
+        title: `Reunião — Modo Sala ${new Date().toLocaleDateString('pt-BR')}`,
+      }).catch(() => {});
+    }
+    // In hybrid mode the platform content script already started the meeting
 
     recognition = buildRecognition();
     if (recognition) {
@@ -268,7 +278,10 @@
     stopAudioPipeline();
     removeOverlay();
 
-    await chrome.runtime.sendMessage({ type: 'END_MEETING' }).catch(() => {});
+    if (!isHybridMode) {
+      // Only end the meeting if this is the sole source (standalone mic mode)
+      await chrome.runtime.sendMessage({ type: 'END_MEETING' }).catch(() => {});
+    }
   }
 
   // ─── Public API (used by popup via scripting.executeScript) ─────────────────
@@ -279,7 +292,7 @@
 
   chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
     if (msg.type === 'MEETSCRIBE_ACTIVATE_MIC') {
-      activate().then(() => sendResponse({ ok: true }));
+      activate({ hybridMode: msg.hybridMode, speakerPrefix: msg.speakerPrefix }).then(() => sendResponse({ ok: true }));
       return true;
     }
     if (msg.type === 'MEETSCRIBE_DEACTIVATE_MIC') {
