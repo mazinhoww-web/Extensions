@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MeetScribe</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+
+  <!-- Header -->
+  <div class="header">
+    <img class="header-logo" src="../icons/icon48.png" alt="MeetScribe">
+    <h1>MeetScribe</h1>
+    <span class="status-badge" id="headerBadge">Inativo</span>
+  </div>
+
+  <!-- ══════════════════════════════════════════════════════
+       VIEW: IDLE — choose mode and start
+  ══════════════════════════════════════════════════════ -->
+  <div class="section active" id="viewIdle">
+
+    <!-- API key warning -->
+    <div class="no-api-warning" id="apiWarning" style="display:none;">
+      ⚠️ API key não configurada.
+      <a id="goOptions">Configurar agora</a>
+    </div>
+
+    <!-- Mode tabs -->
+    <div class="mode-tabs">
+      <div class="mode-tab active" data-mode="platform" id="tabPlatform">Plataforma</div>
+      <div class="mode-tab" data-mode="mic" id="tabMic">Modo Sala</div>
+      <div class="mode-tab" data-mode="history" id="tabHistory">Histórico</div>
+    </div>
+
+    <!-- Platform sub-view -->
+    <div id="modePlatform">
+      <div class="platform-row">
+        <div class="platform-icon">🎥</div>
+        <div class="platform-info">
+          <strong>Google Meet</strong>
+          <span>Legenda automática da plataforma</span>
+        </div>
+        <span class="platform-status" id="meetStatus">—</span>
+      </div>
+
+      <div class="platform-row">
+        <div class="platform-icon">💼</div>
+        <div class="platform-info">
+          <strong>Microsoft Teams</strong>
+          <span>Legenda automática da plataforma</span>
+        </div>
+        <span class="platform-status" id="teamsStatus">—</span>
+      </div>
+
+      <p style="font-size:11px;color:var(--text-muted);margin-bottom:10px;">
+        ⚡ Ative as <strong>legendas</strong> na reunião e clique em Iniciar.
+      </p>
+
+      <button class="btn btn-primary" id="btnStartPlatform">
+        🎙️ Iniciar Transcrição
+      </button>
+    </div>
+
+    <!-- Mic sub-view -->
+    <div id="modeMic" style="display:none;">
+      <div class="platform-row">
+        <div class="platform-icon">🎤</div>
+        <div class="platform-info">
+          <strong>Modo Sala (Microfone)</strong>
+          <span>Para reuniões presenciais sem plataforma</span>
+        </div>
+      </div>
+
+      <p style="font-size:11px;color:var(--text-muted);margin-bottom:8px;">
+        Usa o microfone do computador. Falantes diferentes são identificados por
+        pausas na fala como <em>Falante 1</em>, <em>Falante 2</em>, etc.
+      </p>
+
+      <label style="font-size:12px;color:var(--text-muted);display:block;margin-bottom:4px;">
+        Título da reunião (opcional):
+      </label>
+      <input type="text" id="meetingTitleInput" placeholder="Ex: Reunião de alinhamento"
+        style="width:100%;padding:7px 10px;border:1px solid var(--border);border-radius:8px;font-size:12px;margin-bottom:10px;outline:none;">
+
+      <button class="btn btn-primary" id="btnStartMic">
+        🎤 Iniciar Modo Sala
+      </button>
+    </div>
+
+    <!-- History sub-view -->
+    <div id="modeHistory" style="display:none;">
+      <div id="historyList">
+        <p style="color:var(--text-muted);font-size:12px;text-align:center;padding:16px 0;">
+          Nenhuma reunião no histórico.
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════════════════
+       VIEW: RECORDING
+  ══════════════════════════════════════════════════════ -->
+  <div class="section" id="viewRecording">
+
+    <div class="recording-indicator">
+      <div class="rec-dot"></div>
+      <div class="recording-info">
+        <strong>Transcrevendo reunião</strong>
+        <span id="recordingMeta">Plataforma · <span class="timer" id="timerDisplay">00:00</span></span>
+      </div>
+    </div>
+
+    <div class="caption-count" id="captionCount">0 trechos capturados</div>
+
+    <div class="transcript-preview" id="transcriptPreview"></div>
+
+    <div class="btn-row">
+      <button class="btn btn-danger" id="btnStop">
+        ⏹ Encerrar e Gerar Ata
+      </button>
+    </div>
+    <div class="btn-row">
+      <button class="btn btn-outline btn-sm" id="btnCancelRecording">
+        Cancelar sem salvar
+      </button>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════════════════
+       VIEW: GENERATING
+  ══════════════════════════════════════════════════════ -->
+  <div class="section" id="viewGenerating">
+    <div class="generating-container">
+      <div class="spinner"></div>
+      <strong>Gerando ata com IA</strong>
+      <p class="generating-status" id="generatingStatus">Processando transcrição...</p>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════════════════
+       VIEW: MINUTES READY
+  ══════════════════════════════════════════════════════ -->
+  <div class="section" id="viewMinutes">
+
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
+      <span style="font-size:18px;">✅</span>
+      <strong style="font-size:14px;">Ata gerada com sucesso!</strong>
+    </div>
+
+    <div class="minutes-preview" id="minutesPreview"></div>
+
+    <div class="btn-row">
+      <button class="btn btn-success btn-sm" id="btnCopyMinutes">📋 Copiar</button>
+      <button class="btn btn-outline btn-sm" id="btnDownloadTXT">⬇ TXT</button>
+      <button class="btn btn-outline btn-sm" id="btnDownloadPDF">🖨 PDF</button>
+    </div>
+    <div class="btn-row" style="margin-top:8px;">
+      <button class="btn btn-primary" id="btnNewMeeting">
+        + Nova Reunião
+      </button>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════════════════
+       Footer
+  ══════════════════════════════════════════════════════ -->
+  <div class="footer">
+    <span>MeetScribe v1.0</span>
+    <a id="footerOptions">⚙️ Configurações</a>
+  </div>
+
+  <script src="popup.js" type="module"></script>
+</body>
+</html>

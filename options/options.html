@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <title>MeetScribe — Configurações</title>
+  <link rel="stylesheet" href="options.css">
+</head>
+<body>
+<div class="container">
+
+  <!-- Header -->
+  <div class="page-header">
+    <img src="../icons/icon48.png" alt="MeetScribe">
+    <div>
+      <h1>MeetScribe</h1>
+      <p>Configurações da extensão de transcrição de reuniões</p>
+    </div>
+  </div>
+
+  <!-- ── Card: AI Provider ─────────────────────────────────────── -->
+  <div class="card">
+    <h2>🤖 Provedor de IA para Geração de Atas</h2>
+    <p class="card-desc">
+      Escolha o provedor de IA. Ambos são gratuitos — o Gemini tem 1.500 req/dia,
+      o Groq é ilimitado para uso pessoal.
+    </p>
+
+    <div class="provider-grid">
+      <label class="provider-card selected" id="cardGemini">
+        <input type="radio" name="aiProvider" value="gemini" checked>
+        <div class="p-name">Google Gemini</div>
+        <div class="p-desc">gemini-2.0-flash</div>
+        <span class="p-badge">Recomendado</span>
+      </label>
+      <label class="provider-card" id="cardGroq">
+        <input type="radio" name="aiProvider" value="groq">
+        <div class="p-name">Groq</div>
+        <div class="p-desc">llama-3.3-70b</div>
+        <span class="p-badge">Gratuito</span>
+      </label>
+    </div>
+
+    <!-- Gemini key -->
+    <div class="form-group" id="geminiKeyGroup">
+      <label>
+        API Key do Gemini
+        <span class="optional">(obrigatório para Gemini)</span>
+      </label>
+      <div class="input-row">
+        <input type="password" id="geminiApiKey" placeholder="AIza...">
+        <button class="eye-btn" data-target="geminiApiKey">👁</button>
+      </div>
+      <p class="hint">
+        Obtenha sua key gratuita em
+        <a href="https://aistudio.google.com/app/apikey" target="_blank">Google AI Studio</a>
+        — clique em "Create API key".
+      </p>
+    </div>
+
+    <!-- Groq key -->
+    <div class="form-group" id="groqKeyGroup" style="display:none;">
+      <label>
+        API Key do Groq
+        <span class="optional">(obrigatório para Groq)</span>
+      </label>
+      <div class="input-row">
+        <input type="password" id="groqApiKey" placeholder="gsk_...">
+        <button class="eye-btn" data-target="groqApiKey">👁</button>
+      </div>
+      <p class="hint">
+        Crie uma conta gratuita em
+        <a href="https://console.groq.com" target="_blank">console.groq.com</a>
+        e gere uma API key.
+      </p>
+    </div>
+  </div>
+
+  <!-- ── Card: Language & Output ──────────────────────────────── -->
+  <div class="card">
+    <h2>🌐 Idioma e Saída</h2>
+    <p class="card-desc">Configurações de idioma para transcrição e ata.</p>
+
+    <div class="form-group">
+      <label>Idioma principal das reuniões</label>
+      <select id="language">
+        <option value="pt-BR" selected>Português (Brasil)</option>
+        <option value="pt-PT">Português (Portugal)</option>
+        <option value="en-US">English (US)</option>
+        <option value="en-GB">English (UK)</option>
+        <option value="es-ES">Español</option>
+      </select>
+    </div>
+  </div>
+
+  <!-- ── Card: Behavior ────────────────────────────────────────── -->
+  <div class="card">
+    <h2>⚙️ Comportamento</h2>
+    <p class="card-desc">Ajuste como a extensão se comporta durante as reuniões.</p>
+
+    <div class="toggle-row">
+      <div>
+        <div class="toggle-label">Mostrar overlay nas reuniões</div>
+        <div class="toggle-desc">Exibe indicador "MeetScribe ativo" durante a transcrição</div>
+      </div>
+      <label class="toggle">
+        <input type="checkbox" id="showOverlay" checked>
+        <span class="toggle-slider"></span>
+      </label>
+    </div>
+
+    <div class="toggle-row">
+      <div>
+        <div class="toggle-label">Incluir transcrição completa na ata</div>
+        <div class="toggle-desc">Adiciona a transcrição literal ao final do documento</div>
+      </div>
+      <label class="toggle">
+        <input type="checkbox" id="includeFullTranscript">
+        <span class="toggle-slider"></span>
+      </label>
+    </div>
+
+    <div class="toggle-row">
+      <div>
+        <div class="toggle-label">Qualidade de áudio alta</div>
+        <div class="toggle-desc">Grava áudio em maior qualidade para melhor análise (usa mais espaço)</div>
+      </div>
+      <label class="toggle">
+        <input type="checkbox" id="audioQualityHigh" checked>
+        <span class="toggle-slider"></span>
+      </label>
+    </div>
+
+    <div class="form-group" style="margin-top:16px;">
+      <label>Pausa para troca de falante (Modo Sala)</label>
+      <select id="speakerGap">
+        <option value="1500">1.5 segundos</option>
+        <option value="2500" selected>2.5 segundos (padrão)</option>
+        <option value="4000">4 segundos</option>
+        <option value="6000">6 segundos</option>
+      </select>
+      <p class="hint">Tempo de silêncio que indica que um falante diferente começou a falar.</p>
+    </div>
+  </div>
+
+  <!-- ── Card: Data ────────────────────────────────────────────── -->
+  <div class="card">
+    <h2>🗂 Dados e Privacidade</h2>
+    <p class="card-desc">
+      Toda a transcrição é processada localmente ou enviada diretamente para a API que você configurou.
+      Nenhum dado é enviado para servidores do MeetScribe.
+    </p>
+    <div class="toggle-row">
+      <div>
+        <div class="toggle-label">Apagar áudio após gerar ata</div>
+        <div class="toggle-desc">Remove os dados de áudio do IndexedDB após a geração</div>
+      </div>
+      <label class="toggle">
+        <input type="checkbox" id="deleteAudioAfter" checked>
+        <span class="toggle-slider"></span>
+      </label>
+    </div>
+  </div>
+
+  <!-- ── Save button ───────────────────────────────────────────── -->
+  <div class="save-row">
+    <button class="btn-save" id="btnSave">💾 Salvar Configurações</button>
+    <span class="save-status" id="saveStatus">✅ Salvo com sucesso!</span>
+  </div>
+
+</div>
+<script src="options.js"></script>
+</body>
+</html>
