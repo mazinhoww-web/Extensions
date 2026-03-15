@@ -128,7 +128,11 @@ async function detectPlatforms() {
     // Auto-select platform tab and pre-check hybrid mode when on a meeting platform
     if (onMeet || onTeams) {
       setMode('platform');
-      if (hybridToggle) hybridToggle.checked = true;
+      if (hybridToggle) {
+        hybridToggle.checked = true;
+        const tip = document.getElementById('multilingualTip');
+        if (tip) tip.style.display = 'block';
+      }
     }
   } catch (_) {}
 }
@@ -468,6 +472,16 @@ document.addEventListener('DOMContentLoaded', async () => {
     chrome.runtime.openOptionsPage()
   );
   document.getElementById('footerOptions')?.addEventListener('click', () =>
+    chrome.runtime.openOptionsPage()
+  );
+
+  // Hybrid toggle: show/hide multilingual tip, and auto-show if already checked on load
+  const hybridToggle = document.getElementById('hybridModeToggle');
+  const multilingualTip = document.getElementById('multilingualTip');
+  hybridToggle?.addEventListener('change', (e) => {
+    if (multilingualTip) multilingualTip.style.display = e.target.checked ? 'block' : 'none';
+  });
+  document.getElementById('tipGoOptions')?.addEventListener('click', () =>
     chrome.runtime.openOptionsPage()
   );
 

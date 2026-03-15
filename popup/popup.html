@@ -58,7 +58,7 @@
       </p>
 
       <!-- Hybrid mode toggle -->
-      <label style="display:flex;align-items:flex-start;gap:8px;margin-bottom:10px;cursor:pointer;">
+      <label style="display:flex;align-items:flex-start;gap:8px;margin-bottom:6px;cursor:pointer;">
         <input type="checkbox" id="hybridModeToggle" style="margin-top:2px;flex-shrink:0;">
         <span style="font-size:12px;">
           <strong>Modo Híbrido</strong> — sala + remotos<br>
@@ -67,6 +67,14 @@
           </span>
         </span>
       </label>
+
+      <!-- Multilingual tip -->
+      <div id="multilingualTip" style="display:none;background:rgba(99,102,241,0.08);border-left:3px solid #6366f1;padding:7px 10px;border-radius:4px;font-size:11px;color:var(--text-muted);margin-bottom:10px;line-height:1.5;">
+        🌐 <strong>Reunião multilíngue?</strong> Se as legendas estiverem traduzidas para pt-BR,
+        o áudio captado será transcrito no idioma original pelo Gemini.
+        Para melhor resultado, configure sua API key do Gemini nas
+        <a id="tipGoOptions" style="color:#6366f1;cursor:pointer;">configurações</a>.
+      </div>
 
       <button class="btn btn-primary" id="btnStartPlatform">
         🎙️ Iniciar Transcrição

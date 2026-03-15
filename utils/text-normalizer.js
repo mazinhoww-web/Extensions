@@ -74,17 +74,34 @@ function mergeWithGemini(captionChunks, geminiTranscript) {
   // - A string: plain text, no timestamps
   // - An array: [{speaker, text, timestamp}] from Gemini's structured output
 
+  let geminiSegments;
   if (typeof geminiTranscript === 'string') {
-    // Parse Gemini's text output into segments using speaker change cues
-    const geminiSegments = parseGeminiText(geminiTranscript);
-    return alignSegments(captionChunks, geminiSegments);
+    geminiSegments = parseGeminiText(geminiTranscript);
+  } else if (Array.isArray(geminiTranscript)) {
+    geminiSegments = geminiTranscript;
+  } else {
+    return captionChunks.map((c) => ({ ...c, text: cleanText(c.text), source: 'caption' }));
   }
 
-  if (Array.isArray(geminiTranscript)) {
-    return alignSegments(captionChunks, geminiTranscript);
+  if (!geminiSegments || geminiSegments.length === 0) {
+    return captionChunks.map((c) => ({ ...c, text: cleanText(c.text), source: 'caption' }));
   }
 
-  return captionChunks.map((c) => ({ ...c, text: cleanText(c.text), source: 'caption' }));
+  // Attempt similarity-based merge (works when captions and audio are in the same language)
+  const similarityResult = alignSegments(captionChunks, geminiSegments);
+
+  // Detect if platform captions are translated: if very few segments matched by similarity,
+  // the captions and audio transcription are likely in different languages.
+  const mergedCount = similarityResult.filter((s) => s.source === 'merged').length;
+  const mergeRatio = captionChunks.length > 0 ? mergedCount / captionChunks.length : 1;
+
+  if (mergeRatio < 0.2 && geminiSegments.length > 0) {
+    // Low match rate → captions are probably translated; use audio-first merge.
+    // Take Gemini text (original language) and map speakers from captions by position.
+    return audioFirstMerge(captionChunks, geminiSegments);
+  }
+
+  return similarityResult;
 }
 
 function parseGeminiText(text) {
@@ -114,7 +131,33 @@ function parseGeminiText(text) {
   return segments;
 }
 
-function alignSegments(captionChunks, geminiSegments) {
+// ─── Audio-first merge ────────────────────────────────────────────────────────
+// Used when platform captions appear to be translated (low text similarity with
+// Gemini audio transcript). Takes Gemini text as authoritative source (original
+// language) and maps speaker names from captions by proportional position.
+
+function audioFirstMerge(captionChunks, geminiSegments) {
+  const n = captionChunks.length;
+  const m = geminiSegments.length;
+
+  return geminiSegments.map((seg, i) => {
+    // Map Gemini segment i → caption index by proportional position
+    const captionIdx = n > 0 ? Math.min(Math.round((i / Math.max(m - 1, 1)) * (n - 1)), n - 1) : -1;
+    const speaker =
+      captionIdx >= 0 ? captionChunks[captionIdx].speaker : seg.speaker || 'Falante';
+    const timestamp =
+      captionIdx >= 0 ? captionChunks[captionIdx].timestamp : seg.timestamp || Date.now();
+
+    return {
+      speaker,
+      text: cleanText(seg.text),
+      timestamp,
+      source: 'audio-primary',
+    };
+  });
+}
+
+// ─── Similarity-based merge ───────────────────────────────────────────────────
   if (!geminiSegments || geminiSegments.length === 0) {
     return captionChunks.map((c) => ({ ...c, text: cleanText(c.text), source: 'caption' }));
   }
