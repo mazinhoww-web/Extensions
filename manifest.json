@@ -50,7 +50,8 @@
     "https://teams.live.com/*",
     "https://*.teams.microsoft.com/*",
     "https://generativelanguage.googleapis.com/*",
-    "https://api.groq.com/*"
+    "https://api.groq.com/*",
+    "https://api.assemblyai.com/*"
   ],
   "options_ui": {
     "page": "options/options.html",

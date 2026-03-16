@@ -4,6 +4,7 @@
 import { generateMinutes, transcribeAudioWithGemini } from '../utils/minutes-generator.js';
 import { normalizeTranscript } from '../utils/text-normalizer.js';
 import { exportTXT, exportPDF, copyToClipboard } from '../utils/exporter.js';
+import { transcribeWithAssemblyAI } from '../utils/assemblyai-transcriber.js';
 
 // ─── State ────────────────────────────────────────────────────────────────────
 
@@ -341,22 +342,23 @@ async function generateAta() {
       .catch(() => ({ meeting: null }));
     const allCaptions = stored?.captionChunks || captionChunks;
 
-    // Attempt Gemini audio re-transcription (better quality, not mandatory)
-    let geminiTranscript = null;
-    const { geminiApiKey } = await chrome.storage.sync.get('geminiApiKey');
-    if (geminiApiKey) {
-      const { chunks: audioChunks } = await chrome.runtime
-        .sendMessage({ type: 'GET_AUDIO_CHUNKS' })
-        .catch(() => ({ chunks: [] }));
-      if (audioChunks?.length > 0) {
-        setGeneratingStatus('Analisando áudio com IA...');
-        geminiTranscript = await transcribeAudioWithGemini(geminiApiKey, audioChunks, allCaptions)
-          .catch(() => null);
-      }
+    // Recorder page is always Modo Sala (mic) — use AssemblyAI for real diarization
+    const { chunks: audioChunks } = await chrome.runtime
+      .sendMessage({ type: 'GET_AUDIO_CHUNKS' })
+      .catch(() => ({ chunks: [] }));
+
+    let assemblyTranscript = null;
+    if (audioChunks?.length > 0) {
+      setGeneratingStatus('Identificando falantes por voz...');
+      assemblyTranscript = await transcribeWithAssemblyAI(audioChunks).catch((err) => {
+        console.warn('[MeetScribe] AssemblyAI falhou, usando transcrição local:', err.message);
+        return null;
+      });
     }
 
     setGeneratingStatus('Reconciliando texto...');
-    const normalized = normalizeTranscript(allCaptions, geminiTranscript);
+    const captionsForNormalize = assemblyTranscript || allCaptions;
+    const normalized = normalizeTranscript(captionsForNormalize, null);
 
     await chrome.runtime.sendMessage({
       type: 'SAVE_FIELD', field: 'normalizedTranscript', value: normalized,

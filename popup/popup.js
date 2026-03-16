@@ -3,6 +3,7 @@
 import { generateMinutes, transcribeAudioWithGemini } from '../utils/minutes-generator.js';
 import { normalizeTranscript, formatTranscriptForDisplay } from '../utils/text-normalizer.js';
 import { exportTXT, exportPDF, copyToClipboard } from '../utils/exporter.js';
+import { transcribeWithAssemblyAI } from '../utils/assemblyai-transcriber.js';
 
 // ─── State ────────────────────────────────────────────────────────────────────
 
@@ -311,17 +312,30 @@ async function stopAndGenerate() {
       .catch(() => ({ meeting: null }));
     const allCaptions = storedMeeting?.captionChunks || captionChunks;
 
+    const isSalaMode = ['mic', 'hybrid'].includes(meeting?.platform);
+    let assemblyTranscript = null;
     let geminiTranscript = null;
-    const { geminiApiKey } = await chrome.storage.sync.get('geminiApiKey');
 
-    // Try audio transcription with Gemini if we have audio and API key
-    if (audioChunks?.length > 0 && geminiApiKey) {
-      updateGeneratingStatus('Analisando áudio com IA...');
-      geminiTranscript = await transcribeAudioWithGemini(geminiApiKey, audioChunks, allCaptions);
+    if (audioChunks?.length > 0) {
+      if (isSalaMode) {
+        updateGeneratingStatus('Identificando falantes por voz...');
+        assemblyTranscript = await transcribeWithAssemblyAI(audioChunks).catch((err) => {
+          console.warn('[MeetScribe] AssemblyAI falhou, usando transcrição local:', err.message);
+          return null;
+        });
+      } else {
+        const { geminiApiKey } = await chrome.storage.sync.get('geminiApiKey');
+        if (geminiApiKey) {
+          updateGeneratingStatus('Analisando áudio com IA...');
+          geminiTranscript = await transcribeAudioWithGemini(geminiApiKey, audioChunks, allCaptions);
+        }
+      }
     }
 
     updateGeneratingStatus('Normalizando e reconciliando texto...');
-    const normalizedTranscript = normalizeTranscript(allCaptions, geminiTranscript);
+    const captionsForNormalize = (isSalaMode && assemblyTranscript) ? assemblyTranscript : allCaptions;
+    const geminiForNormalize   = (isSalaMode && assemblyTranscript) ? null : geminiTranscript;
+    const normalizedTranscript = normalizeTranscript(captionsForNormalize, geminiForNormalize);
 
     // Save normalized transcript
     await chrome.runtime.sendMessage({

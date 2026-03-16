@@ -191,4 +191,104 @@ A1 (Login Google)
 ├── F7 (Sincronização entre dispositivos)
 ├── F6 (Dashboard web)
 └── F17 (Modo empresa)
+
+B5 (Remover heurística pausa)
+└── M8 (Diarização real — AssemblyAI) ← IMPLEMENTADO nesta sprint via assemblyai-transcriber.js
 ```
+
+---
+
+## Sprint Planning
+
+### Sprint 1 — Qualidade de Gravação e Diarização ✅ atual
+> Foco: fazer o Modo Sala funcionar com qualidade profissional de identificação de voz.
+
+- [x] Auto-start gravação ao entrar no Meet/Teams
+- [x] Diarização real por voz no Modo Sala via AssemblyAI (M8) ← **entregue nesta sprint**
+- [ ] B1: Fix captura em abas inativas (Chrome throttling pausava gravação ao trocar aba)
+- [ ] B2: Melhoria em salas com eco (algoritmo de diarização mais robusto com reverberação)
+- [ ] B3: Fix bug de reconexão após queda de internet
+- [ ] B4: Fix dessincronismo de legendas em alta latência
+- [ ] B5: Remover setting "Pausa para troca de falante" do options (substituído pelo AssemblyAI)
+- [ ] B6: Transcrição completa ausente no modo offline
+
+---
+
+### Sprint 2 — UX, Onboarding e Interface
+> Foco: reduzir atrito para novos usuários e modernizar a interface.
+
+- [ ] M1: Redesign do popup (histórico de reuniões + ações rápidas)
+- [ ] M2: Onboarding interativo (tour guiado <2 min para novos usuários)
+- [ ] M3: Dark/Light mode no popup
+- [ ] M4: Indicador de qualidade de áudio em tempo real (Modo Sala)
+- [ ] M5: Progress bar visual durante geração da ata
+- [ ] M6: Atalhos de teclado configuráveis
+- [ ] M7: Interface em inglês e espanhol (internacionalização)
+
+---
+
+### Sprint 3 — Exportação e Primeiras Integrações
+> Foco: levar a ata para onde o usuário trabalha.
+
+- [ ] F2: Templates customizáveis de ata (1:1, Sprint, Comercial, Entrevista...)
+- [ ] F3: Resumo por email automático ao fim da reunião
+- [ ] F8: Exportação para Google Docs (Google Doc formatado direto da ata)
+- [ ] F9: Exportação para Confluence
+- [ ] I1: Integração com Notion (exportação direta para página Notion)
+- [ ] C-F1/F10: Timestamps clicáveis na transcrição
+- [ ] C-F5: Vocabulário customizado por organização (glossário técnico)
+
+---
+
+### Sprint 4 — Plataformas e Inteligência
+> Foco: ampliar alcance (Zoom, Teams desktop) e adicionar análise de reuniões.
+
+- [ ] F1: Suporte a Zoom Web (captura de legendas ao vivo)
+- [ ] C-F7: Integração nativa Teams sem bot (Graph API — preparação para bloqueio Microsoft mai/2026)
+- [ ] F13: Análise de engajamento (tempo de fala por participante)
+- [ ] F14: Detecção de sentimento da reunião
+- [ ] C-F3: Talk time % por participante
+- [ ] C-F6: AI Chat cross-reuniões (perguntas sobre histórico inteiro)
+
+---
+
+### Sprint 5 — Conta, Nuvem e Modo Empresa
+> Foco: identidade do usuário, sincronização e features de time.
+
+- [ ] A1: Login com Google (OAuth)
+- [ ] A2: Auto-detecção de Gemini Key via conta Google
+- [ ] F6: Dashboard web (histórico e gestão de atas em qualquer dispositivo)
+- [ ] F7: Sincronização entre dispositivos (requer A1)
+- [ ] F11: Busca semântica nas atas
+- [ ] F15: API pública para desenvolvedores (REST API com token)
+- [ ] F16: Suporte a webhooks
+- [ ] F17: Modo empresa (times, permissões por papel, relatórios consolidados)
+
+---
+
+### Sprint 6 — Integrações de Produtividade
+> Foco: fechar o loop da reunião com as ferramentas de trabalho do time.
+
+- [ ] I2: Slack (ata automática no canal)
+- [ ] I3: Jira (issues/tasks a partir das ações da ata)
+- [ ] I4: Trello (cards com action items)
+- [ ] I5: Asana (tarefas sincronizadas)
+- [ ] I6: Monday.com (items com responsáveis e prazos)
+- [ ] I7: Google Calendar (iniciar transcrição ao detectar evento)
+- [ ] I8: OpenAI GPT (provedor de IA alternativo)
+- [ ] C-F4: Video soundbites — clipes compartilháveis de momentos-chave
+
+---
+
+### Backlog Longo Prazo (sem sprint definida)
+- [ ] F4: App mobile iOS (Safari Extension + Meet mobile)
+- [ ] F5: App mobile Android (Chrome Android)
+- [ ] F12: Modo live share (transcrição em tempo real para participantes remotos)
+- [ ] F18: Teams desktop (app nativo instalado)
+- [ ] C-F8: Detecção de risco em reuniões de vendas (objeções, sentimento por deal)
+- [ ] C-F9: Upload de gravações já encerradas (áudio/vídeo pré-gravado)
+- [ ] M8 (migração): Chave AssemblyAI para backend proxy (remover hardcode da extensão)
+
+---
+
+## Dependências entre itens
