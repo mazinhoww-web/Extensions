@@ -89,7 +89,7 @@
 | ID | Item | Descrição |
 |----|------|-----------|
 | M7 | Interface em inglês e espanhol | Internacionalização completa da extensão e das atas geradas |
-| M8 | Diarização real por voz no Modo Sala | Identificar cada falante pelo timbre/impressão vocal, não por pausa. Gravar áudio em chunks e enviar à API de diarização (AssemblyAI, Deepgram ou Pyannote) ao final da reunião. Retorno: segmentos com speaker ID (Falante A, Falante B...) mapeados sobre a transcrição existente. Depende de B5. |
+| M8 | Diarização real por voz no Modo Sala | Identificar cada falante pelo timbre/impressão vocal, não por pausa. Gravar áudio em chunks e enviar à API AssemblyAI ao final da reunião. Retorno: segmentos com speaker ID (Falante A, Falante B...) mapeados sobre a transcrição existente. **A chave AssemblyAI fica no backend do produto (custo do desenvolvedor, não do usuário)** — requer um proxy/backend para não expor a key no client. Depende de B5. |
 
 ### Bug Fix
 | ID | Item | Descrição |
