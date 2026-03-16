@@ -101,19 +101,38 @@ function setupEyeButtons() {
 // ─── API key test ─────────────────────────────────────────────────────────────
 
 async function testGeminiKey(key) {
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${key}`;
-  const res = await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      contents: [{ parts: [{ text: 'Responda apenas: OK' }] }],
-      generationConfig: { maxOutputTokens: 5 },
-    }),
-  });
-  if (!res.ok) {
+  const models = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash'];
+  let lastErr;
+
+  for (const model of models) {
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`;
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: [{ parts: [{ text: 'Responda apenas: OK' }] }],
+        generationConfig: { maxOutputTokens: 5 },
+      }),
+    });
+
+    if (res.ok) return; // chave válida
+
     const data = await res.json().catch(() => ({}));
-    throw new Error(data?.error?.message || `Erro HTTP ${res.status}`);
+    const msg = data?.error?.message || `Erro HTTP ${res.status}`;
+
+    if (res.status === 429) {
+      // 429 com limit:0 = modelo não disponível neste projeto, tenta o próximo
+      if (msg.includes('limit: 0')) { lastErr = new Error(msg); continue; }
+      // 429 normal = quota atingida mas chave é válida
+      return;
+    }
+
+    if (res.status === 400 || res.status === 404) { lastErr = new Error(msg); continue; }
+
+    throw new Error(msg);
   }
+
+  throw lastErr || new Error('Nenhum modelo Gemini disponível para esta chave');
 }
 
 async function testGroqKey(key) {

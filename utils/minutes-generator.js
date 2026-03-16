@@ -153,7 +153,7 @@ function platformLabel(platform) {
 
 // ─── Gemini API ───────────────────────────────────────────────────────────────
 
-async function callGemini(apiKey, prompt, model = 'gemini-2.0-flash', onProgress) {
+async function callGemini(apiKey, prompt, model = 'gemini-2.5-flash', onProgress) {
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
 
   const body = {
@@ -264,7 +264,7 @@ Formato de saída — uma linha por trecho de fala:
 
 Seja preciso e mantenha todas as informações ditas.`;
 
-    const model = 'gemini-2.0-flash';
+    const model = 'gemini-2.5-flash';
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
 
     const body = {
@@ -350,19 +350,21 @@ export async function generateMinutes(meeting, normalizedTranscript, onProgress)
 
   try {
     if (effectiveProvider === 'gemini') {
-      return await callGemini(geminiApiKey, geminiPrompt, 'gemini-2.0-flash', onProgress);
+      return await callGemini(geminiApiKey, geminiPrompt, 'gemini-2.5-flash', onProgress);
     } else {
       return await callGroq(groqApiKey, buildGroqPrompt());
     }
   } catch (err) {
     const is429 = err.message.includes('Limite da API Gemini') || err.message.includes('429');
 
-    // Fallback 1: gemini-1.5-flash (cota separada)
+    // Fallback 1: tentar modelos alternativos Gemini (cotas/projetos independentes)
     if (is429 && geminiApiKey) {
-      onProgress?.('Tentando gemini-1.5-flash...');
-      try {
-        return await callGemini(geminiApiKey, geminiPrompt, 'gemini-1.5-flash', onProgress);
-      } catch (_) { /* continua para Groq */ }
+      for (const fallbackModel of ['gemini-2.0-flash', 'gemini-1.5-flash']) {
+        onProgress?.(`Tentando ${fallbackModel}...`);
+        try {
+          return await callGemini(geminiApiKey, geminiPrompt, fallbackModel, onProgress);
+        } catch (_) { /* continua */ }
+      }
     }
 
     // Fallback 2: Groq (com transcript truncado se necessário)
