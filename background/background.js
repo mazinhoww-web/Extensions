@@ -68,7 +68,7 @@ async function getCurrentMeeting() {
   return currentMeeting || null;
 }
 
-async function startMeeting(platform, title = '') {
+async function startMeeting(platform, title = '', tabId = null) {
   const meeting = {
     id: generateId(),
     platform,
@@ -78,6 +78,7 @@ async function startMeeting(platform, title = '') {
     captionChunks: [],
     normalizedTranscript: [],
     minutesMarkdown: null,
+    tabId,  // tab where recording started — used to target deactivation even after tab switch
   };
   await chrome.storage.local.set({ currentMeeting: meeting });
   return meeting;
@@ -156,7 +157,7 @@ async function handleMessage(msg, sender) {
         // Same platform or already hybrid — return existing meeting
         return { success: true, meeting: existing };
       }
-      const meeting = await startMeeting(platform, msg.title);
+      const meeting = await startMeeting(platform, msg.title, sender.tab?.id ?? null);
       // Notify any open popup
       notifyPopup({ type: 'MEETING_STARTED', meeting });
       return { success: true, meeting };

@@ -286,18 +286,17 @@ async function stopAndGenerate() {
     const { meeting: endedMeeting } = await chrome.runtime.sendMessage({ type: 'END_MEETING' });
     meeting = endedMeeting || meeting;
 
-    // Deactivate content script(s)
+    // Deactivate content script(s) — use stored tabId so it works even if the user switched tabs
     try {
-      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-      if (tab) {
+      const targetTabId = meeting?.tabId;
+      if (targetTabId) {
         const platform = meeting?.platform;
         if (platform === 'hybrid') {
-          // Hybrid: deactivate both platform captions and mic
-          await chrome.tabs.sendMessage(tab.id, { type: 'MEETSCRIBE_DEACTIVATE' }).catch(() => {});
-          await chrome.tabs.sendMessage(tab.id, { type: 'MEETSCRIBE_DEACTIVATE_MIC' }).catch(() => {});
+          await chrome.tabs.sendMessage(targetTabId, { type: 'MEETSCRIBE_DEACTIVATE' }).catch(() => {});
+          await chrome.tabs.sendMessage(targetTabId, { type: 'MEETSCRIBE_DEACTIVATE_MIC' }).catch(() => {});
         } else {
           const deactivateMsg = platform === 'mic' ? 'MEETSCRIBE_DEACTIVATE_MIC' : 'MEETSCRIBE_DEACTIVATE';
-          await chrome.tabs.sendMessage(tab.id, { type: deactivateMsg }).catch(() => {});
+          await chrome.tabs.sendMessage(targetTabId, { type: deactivateMsg }).catch(() => {});
         }
       }
     } catch (_) {}
@@ -419,10 +418,10 @@ async function cancelRecording() {
   stopTimer();
 
   try {
-    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-    if (tab) {
-      await chrome.tabs.sendMessage(tab.id, { type: 'MEETSCRIBE_DEACTIVATE' }).catch(() => {});
-      await chrome.tabs.sendMessage(tab.id, { type: 'MEETSCRIBE_DEACTIVATE_MIC' }).catch(() => {});
+    const targetTabId = meeting?.tabId;
+    if (targetTabId) {
+      await chrome.tabs.sendMessage(targetTabId, { type: 'MEETSCRIBE_DEACTIVATE' }).catch(() => {});
+      await chrome.tabs.sendMessage(targetTabId, { type: 'MEETSCRIBE_DEACTIVATE_MIC' }).catch(() => {});
     }
   } catch (_) {}
 
