@@ -40,9 +40,9 @@
   "permissions": [
     "storage",
     "activeTab",
+    "tabs",
     "scripting",
-    "downloads",
-    "microphone"
+    "downloads"
   ],
   "host_permissions": [
     "https://meet.google.com/*",

@@ -40,6 +40,18 @@ function setMode(mode) {
   if (mode === 'history') loadHistory();
 }
 
+// ─── Error display (alert() doesn't work in extension popups) ────────────────
+
+function showError(msg) {
+  const el = document.getElementById('errorBanner');
+  if (el) {
+    el.textContent = msg;
+    el.style.display = 'block';
+    setTimeout(() => { el.style.display = 'none'; }, 8000);
+  }
+  console.error('[MeetScribe]', msg);
+}
+
 // ─── Status badge ─────────────────────────────────────────────────────────────
 
 function setHeaderBadge(text, type) {
@@ -155,28 +167,33 @@ async function startPlatformRecording() {
 
   try {
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-    if (!tab) return alert('Nenhuma aba ativa encontrada.');
+    if (!tab) return showError('Nenhuma aba ativa encontrada.');
 
     const url = tab.url || '';
     const isMeetingUrl = url.includes('meet.google.com') ||
       url.includes('teams.microsoft.com') || url.includes('teams.live.com');
 
     if (!isMeetingUrl) {
-      alert('Acesse uma reunião no Google Meet ou Microsoft Teams primeiro, depois clique em Iniciar.');
+      showError('Acesse uma reunião no Google Meet ou Microsoft Teams primeiro, depois clique em Iniciar.');
       return;
     }
+
+    // Inject content script first (handles tabs that were open before extension install)
+    const scriptFile = url.includes('meet.google.com') ? 'content/google-meet.js' : 'content/teams.js';
+    await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: [scriptFile] }).catch(() => {});
 
     // Send activation message to content script
     await chrome.tabs.sendMessage(tab.id, { type: 'MEETSCRIBE_ACTIVATE' });
 
     // Background has already received START_MEETING from content script
+    await new Promise((r) => setTimeout(r, 400));
     const { meeting: m } = await chrome.runtime.sendMessage({ type: 'GET_CURRENT_MEETING' });
     meeting = m;
     captionChunks = [];
 
     enterRecordingView(meeting);
   } catch (err) {
-    alert(`Erro ao iniciar: ${err.message}\n\nCertifique-se de estar em uma reunião ativa.`);
+    showError(`Erro ao iniciar: ${err.message}. Certifique-se de estar em uma reunião ativa.`);
   }
 }
 
@@ -185,28 +202,27 @@ async function startPlatformRecording() {
 async function startHybridRecording() {
   try {
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-    if (!tab) return alert('Nenhuma aba ativa encontrada.');
+    if (!tab) return showError('Nenhuma aba ativa encontrada.');
 
     const url = tab.url || '';
     const isMeetingUrl = url.includes('meet.google.com') ||
       url.includes('teams.microsoft.com') || url.includes('teams.live.com');
 
     if (!isMeetingUrl) {
-      alert('Acesse uma reunião no Google Meet ou Microsoft Teams primeiro, depois clique em Iniciar.');
+      showError('Acesse uma reunião no Google Meet ou Microsoft Teams primeiro, depois clique em Iniciar.');
       return;
     }
 
-    // Step 1: activate platform caption scraping (content script sends START_MEETING)
+    // Step 1: inject + activate platform caption scraping
+    const platformScript = url.includes('meet.google.com') ? 'content/google-meet.js' : 'content/teams.js';
+    await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: [platformScript] }).catch(() => {});
     await chrome.tabs.sendMessage(tab.id, { type: 'MEETSCRIBE_ACTIVATE' });
 
-    // Brief wait for background to register the meeting before injecting mic
+    // Wait for background to register the meeting before injecting mic
     await new Promise((r) => setTimeout(r, 600));
 
     // Step 2: inject and activate mic-fallback in hybrid mode (no new START_MEETING)
-    await chrome.scripting.executeScript({
-      target: { tabId: tab.id },
-      files: ['content/mic-fallback.js'],
-    });
+    await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ['content/mic-fallback.js'] }).catch(() => {});
     await chrome.tabs.sendMessage(tab.id, { type: 'MEETSCRIBE_ACTIVATE_MIC', hybridMode: true });
 
     const { meeting: m } = await chrome.runtime.sendMessage({ type: 'GET_CURRENT_MEETING' });
@@ -215,7 +231,7 @@ async function startHybridRecording() {
 
     enterRecordingView(meeting);
   } catch (err) {
-    alert(`Erro ao iniciar modo híbrido: ${err.message}\n\nCertifique-se de estar em uma reunião ativa e ter concedido permissão de microfone.`);
+    showError(`Erro ao iniciar modo híbrido: ${err.message}`);
   }
 }
 
@@ -250,7 +266,7 @@ async function startMicRecording() {
 
     enterRecordingView(meeting);
   } catch (err) {
-    alert(`Erro ao iniciar modo sala: ${err.message}`);
+    showError(`Erro ao iniciar modo sala: ${err.message}`);
   }
 }
 
@@ -345,7 +361,7 @@ async function stopAndGenerate() {
 
     showMinutes(minutesMarkdown);
   } catch (err) {
-    alert(`Erro ao gerar ata: ${err.message}`);
+    showError(`Erro ao gerar ata: ${err.message}`);
     showView('idle');
     setHeaderBadge('Inativo', '');
   }
@@ -405,7 +421,7 @@ async function loadHistory() {
 // ─── Cancel recording ─────────────────────────────────────────────────────────
 
 async function cancelRecording() {
-  if (!confirm('Cancelar gravação? A transcrição atual será perdida.')) return;
+  // confirm() doesn't work in extension popups — just cancel directly
 
   stopTimer();
 
