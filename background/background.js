@@ -110,6 +110,14 @@ async function saveMeetingField(field, value) {
   if (!meeting) return;
   meeting[field] = value;
   await chrome.storage.local.set({ currentMeeting: meeting });
+
+  // Also update the matching entry in meetings history so the field is available when browsing history
+  const { meetings = [] } = await chrome.storage.local.get('meetings');
+  const idx = meetings.findIndex((m) => m.id === meeting.id);
+  if (idx !== -1) {
+    meetings[idx][field] = value;
+    await chrome.storage.local.set({ meetings });
+  }
 }
 
 async function clearCurrentMeeting() {

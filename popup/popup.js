@@ -398,8 +398,15 @@ async function loadHistory() {
 
   list.querySelectorAll('.history-item').forEach((item) => {
     item.addEventListener('click', () => {
-      const m = meetings.find((x) => x.id === item.dataset.id);
-      if (m?.minutesMarkdown) showMinutes(m.minutesMarkdown);
+      const m = meetings.find((x) => String(x.id) === String(item.dataset.id));
+      if (!m) return;
+      if (m.minutesMarkdown) {
+        minutesMarkdown = m.minutesMarkdown;
+        meeting = m;
+        showMinutes(m.minutesMarkdown);
+      } else {
+        showError('Esta reunião não tem ata gerada. A ata só está disponível para reuniões encerradas pelo MeetScribe.');
+      }
     });
   });
 }
@@ -541,6 +548,13 @@ document.addEventListener('DOMContentLoaded', async () => {
     setHeaderBadge('Inativo', '');
     chrome.runtime.sendMessage({ type: 'CLEAR_MEETING' });
   });
+
+  // Dynamic version from manifest
+  const versionEl = document.getElementById('footerVersion');
+  if (versionEl) {
+    const { version } = chrome.runtime.getManifest();
+    versionEl.textContent = `MeetScribe v${version}`;
+  }
 
   // Initial setup
   await detectPlatforms();
