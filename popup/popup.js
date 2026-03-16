@@ -235,39 +235,25 @@ async function startHybridRecording() {
   }
 }
 
-// ─── Start recording (mic mode) ───────────────────────────────────────────────
+// ─── Start recording (offline mode — opens dedicated recorder page) ───────────
 
 async function startMicRecording() {
-  try {
-    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-    if (!tab) return;
+  const title = document.getElementById('meetingTitleInput')?.value.trim() || '';
+  const recorderBase = chrome.runtime.getURL('recorder/recorder.html');
+  const recorderUrl  = title
+    ? `${recorderBase}?title=${encodeURIComponent(title)}`
+    : recorderBase;
 
-    const title = document.getElementById('meetingTitleInput')?.value || '';
-
-    // Inject mic-fallback script if not already loaded
-    await chrome.scripting.executeScript({
-      target: { tabId: tab.id },
-      files: ['content/mic-fallback.js'],
-    });
-
-    // Send title to background first
-    await chrome.runtime.sendMessage({
-      type: 'START_MEETING',
-      platform: 'mic',
-      title: title || `Reunião Presencial ${new Date().toLocaleDateString('pt-BR')}`,
-    });
-
-    // Activate mic recording in content script
-    await chrome.tabs.sendMessage(tab.id, { type: 'MEETSCRIBE_ACTIVATE_MIC' });
-
-    const { meeting: m } = await chrome.runtime.sendMessage({ type: 'GET_CURRENT_MEETING' });
-    meeting = m;
-    captionChunks = [];
-
-    enterRecordingView(meeting);
-  } catch (err) {
-    showError(`Erro ao iniciar modo sala: ${err.message}`);
+  // If recorder page already open, focus it instead of opening a new one
+  const existing = await chrome.tabs.query({ url: recorderBase });
+  if (existing.length > 0) {
+    await chrome.tabs.update(existing[0].id, { active: true });
+    await chrome.windows.update(existing[0].windowId, { focused: true });
+  } else {
+    await chrome.tabs.create({ url: recorderUrl });
   }
+
+  window.close(); // Close popup
 }
 
 // ─── Enter recording view ─────────────────────────────────────────────────────
@@ -399,7 +385,7 @@ async function loadHistory() {
       const dur = m.endTime
         ? `${Math.round((m.endTime - m.startTime) / 60000)} min`
         : '—';
-      const platform = { 'google-meet': 'Meet', teams: 'Teams', mic: 'Sala', hybrid: 'Híbrido' }[m.platform] || m.platform;
+      const platform = { 'google-meet': 'Meet', teams: 'Teams', mic: 'Offline', hybrid: 'Híbrido' }[m.platform] || m.platform;
       return `<div class="history-item" data-id="${m.id}">
         <div>
           <div class="h-title">${escapeHtml(m.title || 'Reunião sem título')}</div>
@@ -463,11 +449,17 @@ async function checkExistingMeeting() {
   try {
     const { meeting: m } = await chrome.runtime.sendMessage({ type: 'GET_CURRENT_MEETING' });
     if (m && !m.endTime) {
-      meeting = m;
-      captionChunks = m.captionChunks || [];
-      enterRecordingView(m);
-      // Restore preview
-      captionChunks.slice(-10).forEach(addChunkToPreview);
+      if (m.platform === 'mic') {
+        // Offline recording is running in the dedicated recorder page — show banner
+        setMode('mic');
+        const banner = document.getElementById('offlineRecordingBanner');
+        if (banner) banner.style.display = 'block';
+      } else {
+        meeting = m;
+        captionChunks = m.captionChunks || [];
+        enterRecordingView(m);
+        captionChunks.slice(-10).forEach(addChunkToPreview);
+      }
     } else if (m?.minutesMarkdown) {
       minutesMarkdown = m.minutesMarkdown;
       showMinutes(minutesMarkdown);
@@ -504,6 +496,19 @@ document.addEventListener('DOMContentLoaded', async () => {
   // Start buttons
   document.getElementById('btnStartPlatform')?.addEventListener('click', startPlatformRecording);
   document.getElementById('btnStartMic')?.addEventListener('click', startMicRecording);
+
+  // Offline recording banner link → focus existing recorder tab
+  document.getElementById('btnGoToRecorder')?.addEventListener('click', async () => {
+    const recorderBase = chrome.runtime.getURL('recorder/recorder.html');
+    const existing = await chrome.tabs.query({ url: recorderBase });
+    if (existing.length > 0) {
+      await chrome.tabs.update(existing[0].id, { active: true });
+      await chrome.windows.update(existing[0].windowId, { focused: true });
+    } else {
+      await chrome.tabs.create({ url: recorderBase });
+    }
+    window.close();
+  });
 
   // Stop recording
   document.getElementById('btnStop')?.addEventListener('click', stopAndGenerate);

@@ -89,14 +89,14 @@
       <div class="platform-row">
         <div class="platform-icon">🎤</div>
         <div class="platform-info">
-          <strong>Modo Sala (Microfone)</strong>
-          <span>Para reuniões presenciais sem plataforma</span>
+          <strong>Gravação Offline</strong>
+          <span>Reuniões presenciais, sem plataforma</span>
         </div>
       </div>
 
-      <p style="font-size:11px;color:var(--text-muted);margin-bottom:8px;">
-        Usa o microfone do computador. Falantes diferentes são identificados por
-        pausas na fala como <em>Falante 1</em>, <em>Falante 2</em>, etc.
+      <p style="font-size:11px;color:var(--text-muted);margin-bottom:10px;line-height:1.5;">
+        Captura pelo microfone. Abre uma <strong>página dedicada</strong> com transcrição
+        ao vivo, detecção de falantes e geração de ata — funciona em qualquer contexto.
       </p>
 
       <label style="font-size:12px;color:var(--text-muted);display:block;margin-bottom:4px;">
@@ -105,8 +105,14 @@
       <input type="text" id="meetingTitleInput" placeholder="Ex: Reunião de alinhamento"
         style="width:100%;padding:7px 10px;border:1px solid var(--border);border-radius:8px;font-size:12px;margin-bottom:10px;outline:none;">
 
+      <!-- Offline recording in progress banner -->
+      <div id="offlineRecordingBanner" style="display:none;background:rgba(220,38,38,0.07);border-left:3px solid #dc2626;padding:8px 10px;border-radius:6px;font-size:11px;color:#7f1d1d;margin-bottom:10px;line-height:1.5;">
+        ● Gravação offline em andamento.
+        <a id="btnGoToRecorder" style="color:#dc2626;cursor:pointer;font-weight:600;text-decoration:underline;">Abrir gravação →</a>
+      </div>
+
       <button class="btn btn-primary" id="btnStartMic">
-        🎤 Iniciar Modo Sala
+        🎤 Iniciar Gravação Offline
       </button>
     </div>
 

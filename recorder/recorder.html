@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MeetScribe — Gravação Offline</title>
+  <link rel="stylesheet" href="recorder.css">
+</head>
+<body>
+
+  <div class="container">
+
+    <!-- Header -->
+    <div class="page-header">
+      <img src="../icons/icon48.png" alt="MeetScribe">
+      <div>
+        <h1>MeetScribe</h1>
+        <div class="subtitle">Gravação Offline</div>
+      </div>
+      <span id="statusBadge" class="status-badge">Pronto</span>
+    </div>
+
+    <!-- Error banner (shared across all states) -->
+    <div id="errorBanner"></div>
+
+    <!-- ══════════════════════════════════════════════════════
+         STATE: IDLE
+    ══════════════════════════════════════════════════════ -->
+    <div id="stateIdle" class="card">
+
+      <div class="hero">
+        <div class="mic-icon">🎤</div>
+        <h2>Gravar Reunião Presencial</h2>
+        <p>Captura o áudio pelo microfone em tempo real e gera uma ata completa com IA ao encerrar.</p>
+      </div>
+
+      <div class="features">
+        <div class="feature-item">🗣 Transcrição em tempo real</div>
+        <div class="feature-item">👥 Detecta falantes automaticamente</div>
+        <div class="feature-item">📝 Ata gerada por IA</div>
+        <div class="feature-item">📤 Exporta TXT / PDF</div>
+      </div>
+
+      <div class="form-group">
+        <label>Título da reunião <span style="font-weight:400;">(opcional)</span></label>
+        <input type="text" id="titleInput" placeholder="Ex: Alinhamento semanal de vendas">
+      </div>
+
+      <button id="btnStart" class="btn btn-primary btn-lg">
+        🎤 Iniciar Gravação
+      </button>
+
+      <p class="perm-error" id="permError">
+        Permissão de microfone negada. Clique no ícone de cadeado na barra de endereços e permita o acesso ao microfone, depois recarregue a página.
+      </p>
+
+    </div>
+
+    <!-- ══════════════════════════════════════════════════════
+         STATE: RECORDING
+    ══════════════════════════════════════════════════════ -->
+    <div id="stateRecording" class="card" style="display:none;">
+
+      <div class="recording-header">
+        <div class="rec-indicator">
+          <div class="rec-dot"></div>
+          Gravando
+        </div>
+        <div id="timer" class="timer">00:00</div>
+      </div>
+
+      <div id="captionCount" class="caption-count">0 trechos capturados</div>
+
+      <div id="currentSpeaker" class="current-speaker" style="display:none;"></div>
+
+      <div id="transcript" class="transcript">
+        <p style="color:#94a3b8;font-size:13px;text-align:center;padding-top:80px;">
+          Aguardando fala...
+        </p>
+      </div>
+
+      <div class="actions">
+        <button id="btnStop" class="btn btn-danger">
+          ⏹ Encerrar e Gerar Ata
+        </button>
+        <button id="btnCancel" class="btn btn-ghost">
+          Cancelar sem salvar
+        </button>
+      </div>
+
+    </div>
+
+    <!-- ══════════════════════════════════════════════════════
+         STATE: GENERATING
+    ══════════════════════════════════════════════════════ -->
+    <div id="stateGenerating" class="card" style="display:none;">
+      <div class="generating">
+        <div class="spinner"></div>
+        <h2>Gerando Ata com IA</h2>
+        <p id="genStatus">Processando transcrição...</p>
+      </div>
+    </div>
+
+    <!-- ══════════════════════════════════════════════════════
+         STATE: MINUTES
+    ══════════════════════════════════════════════════════ -->
+    <div id="stateMinutes" class="card" style="display:none;">
+
+      <div class="minutes-header">
+        <span class="success-icon">✅</span>
+        <h2>Ata Gerada com Sucesso!</h2>
+      </div>
+
+      <div id="minutesContent" class="minutes-content"></div>
+
+      <div class="export-row">
+        <button id="btnCopy" class="btn btn-success btn-sm">📋 Copiar</button>
+        <button id="btnTxt"  class="btn btn-outline btn-sm">⬇ TXT</button>
+        <button id="btnPdf"  class="btn btn-outline btn-sm">🖨 PDF</button>
+      </div>
+
+      <button id="btnNew" class="btn btn-primary btn-lg" style="margin-top:12px;">
+        + Nova Gravação
+      </button>
+
+    </div>
+
+  </div>
+
+  <script src="recorder.js" type="module"></script>
+</body>
+</html>
