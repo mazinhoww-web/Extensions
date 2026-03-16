@@ -89,12 +89,14 @@
 | ID | Item | Descrição |
 |----|------|-----------|
 | M7 | Interface em inglês e espanhol | Internacionalização completa da extensão e das atas geradas |
+| M8 | Diarização real por voz no Modo Sala | Identificar cada falante pelo timbre/impressão vocal, não por pausa. Gravar áudio em chunks e enviar à API de diarização (AssemblyAI, Deepgram ou Pyannote) ao final da reunião. Retorno: segmentos com speaker ID (Falante A, Falante B...) mapeados sobre a transcrição existente. Depende de B5. |
 
 ### Bug Fix
 | ID | Item | Descrição |
 |----|------|-----------|
 | B3 | Fix: bug de reconexão | Corrigir loop de reconexão após queda de internet durante gravação |
 | B4 | Fix: sincronização de legendas | Corrigir dessincronismo de legendas em conexões com alta latência |
+| B5 | Remover heurística de troca de falante por pausa | A detecção atual (pausa > Xs = novo falante) é incorreta — uma pausa não implica troca de falante. Remover o setting "Pausa para troca de falante" do options e a função `checkSpeakerChange()` do `mic-fallback.js`. Substituir por diarização real (ver M8). |
 
 ### Integrações
 | ID | Item | Descrição |
