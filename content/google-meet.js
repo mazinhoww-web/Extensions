@@ -319,14 +319,45 @@
     }
   });
 
-  // ─── Auto-detect caption activation ─────────────────────────────────────────
-  // Watch for Google Meet captions being turned on by checking for caption container
-
+  // ─── Overlay keep-alive ───────────────────────────────────────────────────────
   let captionCheckInterval = setInterval(() => {
     if (!isActive) return;
     const container = findElement(CONTAINER_SELECTORS);
     if (container && !overlayEl) showOverlay();
   }, 2000);
+
+  // ─── Auto-start detection ─────────────────────────────────────────────────────
+  // Detects when the user actually joins a call (leave button appears in DOM)
+  // and auto-activates recording without requiring a manual click.
+
+  const MEET_LEAVE_SELECTORS = [
+    '[data-tooltip="Leave call"]',
+    '[aria-label="Leave call"]',
+    '[jsname="CQylAd"]',
+  ];
+
+  function isInActiveCall() {
+    if (!/meet\.google\.com\/[a-z]+-[a-z]+-[a-z]+/.test(location.href)) return false;
+    return MEET_LEAVE_SELECTORS.some((sel) => document.querySelector(sel));
+  }
+
+  async function maybeAutoActivate() {
+    if (isActive) return;
+    const { autoStartPlatform = true } = await chrome.storage.sync.get('autoStartPlatform');
+    if (!autoStartPlatform) return;
+    const resp = await chrome.runtime.sendMessage({ type: 'GET_CURRENT_MEETING' }).catch(() => ({}));
+    if (resp?.meeting && !resp.meeting.endTime) return; // already recording
+    activate();
+  }
+
+  (function startAutoDetect() {
+    if (isInActiveCall()) { maybeAutoActivate(); return; }
+    const poll = setInterval(() => {
+      if (isActive) { clearInterval(poll); return; }
+      if (isInActiveCall()) { clearInterval(poll); maybeAutoActivate(); }
+    }, 2000);
+    setTimeout(() => clearInterval(poll), 3 * 60 * 60 * 1000); // expire after 3h
+  })();
 
   // Clean up when page unloads
   window.addEventListener('beforeunload', () => {
@@ -334,5 +365,5 @@
     if (isActive) deactivate();
   });
 
-  console.log('[MeetScribe] Google Meet content script loaded. Click the extension icon to start transcribing.');
+  console.log('[MeetScribe] Google Meet content script loaded. Auto-start enabled by default.');
 })();

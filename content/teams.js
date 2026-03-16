@@ -347,9 +347,40 @@
     }
   });
 
+  // ─── Auto-start detection ─────────────────────────────────────────────────────
+  // Detects when the user actually joins a Teams call (hangup button appears)
+  // and auto-activates recording without requiring a manual click.
+
+  const TEAMS_LEAVE_SELECTORS = [
+    '[data-tid="hangup-button"]',
+    '[data-tid="hangup-button-hangup"]',
+  ];
+
+  function isInActiveCall() {
+    return TEAMS_LEAVE_SELECTORS.some((sel) => document.querySelector(sel));
+  }
+
+  async function maybeAutoActivate() {
+    if (isActive) return;
+    const { autoStartPlatform = true } = await chrome.storage.sync.get('autoStartPlatform');
+    if (!autoStartPlatform) return;
+    const resp = await chrome.runtime.sendMessage({ type: 'GET_CURRENT_MEETING' }).catch(() => ({}));
+    if (resp?.meeting && !resp.meeting.endTime) return; // already recording
+    activate();
+  }
+
+  (function startAutoDetect() {
+    if (isInActiveCall()) { maybeAutoActivate(); return; }
+    const poll = setInterval(() => {
+      if (isActive) { clearInterval(poll); return; }
+      if (isInActiveCall()) { clearInterval(poll); maybeAutoActivate(); }
+    }, 2000);
+    setTimeout(() => clearInterval(poll), 3 * 60 * 60 * 1000); // expire after 3h
+  })();
+
   window.addEventListener('beforeunload', () => {
     if (isActive) deactivate();
   });
 
-  console.log('[MeetScribe] Teams content script loaded.');
+  console.log('[MeetScribe] Teams content script loaded. Auto-start enabled by default.');
 })();

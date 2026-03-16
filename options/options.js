@@ -8,6 +8,7 @@ async function loadSettings() {
     'geminiApiKey',
     'groqApiKey',
     'language',
+    'autoStartPlatform',
     'showOverlay',
     'includeFullTranscript',
     'audioQualityHigh',
@@ -32,6 +33,7 @@ async function loadSettings() {
 
   // Toggles (default to true if undefined)
   const toggleDefaults = {
+    autoStartPlatform: true,
     showOverlay: true,
     includeFullTranscript: false,
     audioQualityHigh: true,
@@ -64,6 +66,7 @@ async function saveSettings() {
     geminiApiKey: geminiKey,
     groqApiKey: groqKey,
     language: document.getElementById('language').value,
+    autoStartPlatform: document.getElementById('autoStartPlatform').checked,
     showOverlay: document.getElementById('showOverlay').checked,
     includeFullTranscript: document.getElementById('includeFullTranscript').checked,
     audioQualityHigh: document.getElementById('audioQualityHigh').checked,
