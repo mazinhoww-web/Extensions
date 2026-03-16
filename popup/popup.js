@@ -49,7 +49,7 @@ function showError(msg) {
     el.style.display = 'block';
     setTimeout(() => { el.style.display = 'none'; }, 8000);
   }
-  console.error('[MeetScribe]', msg);
+  console.warn('[MeetScribe]', msg);
 }
 
 // ─── Status badge ─────────────────────────────────────────────────────────────
