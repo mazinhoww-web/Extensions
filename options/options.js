@@ -16,7 +16,7 @@ async function loadSettings() {
   ]);
 
   // Provider
-  const provider = settings.aiProvider || 'gemini';
+  const provider = settings.aiProvider || 'groq';
   const radios = document.querySelectorAll('input[name="aiProvider"]');
   radios.forEach((r) => {
     r.checked = r.value === provider;
@@ -55,7 +55,7 @@ async function loadSettings() {
 // ─── Save settings ────────────────────────────────────────────────────────────
 
 async function saveSettings() {
-  const provider = document.querySelector('input[name="aiProvider"]:checked')?.value || 'gemini';
+  const provider = document.querySelector('input[name="aiProvider"]:checked')?.value || 'groq';
 
   const settings = {
     aiProvider: provider,
