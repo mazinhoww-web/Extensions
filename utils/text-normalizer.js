@@ -158,6 +158,8 @@ function audioFirstMerge(captionChunks, geminiSegments) {
 }
 
 // ─── Similarity-based merge ───────────────────────────────────────────────────
+
+function alignSegments(captionChunks, geminiSegments) {
   if (!geminiSegments || geminiSegments.length === 0) {
     return captionChunks.map((c) => ({ ...c, text: cleanText(c.text), source: 'caption' }));
   }
