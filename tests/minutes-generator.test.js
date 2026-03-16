@@ -180,6 +180,26 @@ describe('generateMinutes', () => {
     expect(onProgress).toHaveBeenCalledWith(expect.stringMatching(/gerando|IA/i))
   })
 
+  it('deve_gerar_ata_sem_erro_413_quando_transcript_e_muito_longo_para_o_groq', async () => {
+    chrome._syncStore.aiProvider = 'groq'
+    chrome._syncStore.groqApiKey = 'chave-groq'
+
+    // 400 chunks simulando reunião de 60min — gera ~14000+ tokens sem truncar
+    const longTranscript = Array.from({ length: 400 }, (_, i) => ({
+      speaker: i % 2 === 0 ? 'Ana' : 'Bob',
+      text: `Trecho ${i}: discussão sobre o projeto e seus desdobramentos técnicos na sprint atual.`,
+      timestamp: 1000 + i * 9000,
+      source: 'caption',
+    }))
+
+    global.fetch = vi.fn().mockResolvedValue(groqOkResponse('# Ata gerada com sucesso'))
+
+    const result = await generateMinutes(meetingFixture(), longTranscript)
+
+    expect(result).toContain('Ata gerada com sucesso')
+    expect(fetch).toHaveBeenCalledTimes(1)
+  })
+
   it('deve_usar_groq_como_fallback_quando_gemini_falha_com_erro_generico', async () => {
     chrome._syncStore.aiProvider = 'gemini'
     chrome._syncStore.geminiApiKey = 'chave-gemini'
