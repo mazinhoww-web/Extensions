@@ -94,8 +94,7 @@ function platformLabel(platform) {
 
 // ─── Gemini API ───────────────────────────────────────────────────────────────
 
-async function callGemini(apiKey, prompt) {
-  const model = 'gemini-2.0-flash';
+async function callGemini(apiKey, prompt, model = 'gemini-2.0-flash', onProgress) {
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
 
   const body = {
@@ -112,21 +111,37 @@ async function callGemini(apiKey, prompt) {
     ],
   };
 
-  const res = await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-  });
+  const retryDelays = [5000, 10000, 20000];
 
-  if (!res.ok) {
-    const err = await res.text();
-    throw new Error(`Gemini API error ${res.status}: ${err}`);
+  for (let attempt = 0; attempt <= retryDelays.length; attempt++) {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+
+    if (res.ok) {
+      const data = await res.json();
+      const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+      if (!text) throw new Error('Gemini retornou resposta vazia');
+      return text;
+    }
+
+    if (res.status === 429 && attempt < retryDelays.length) {
+      const waitSec = retryDelays[attempt] / 1000;
+      onProgress?.(`Aguardando quota Gemini (${waitSec}s)...`);
+      await new Promise(r => setTimeout(r, retryDelays[attempt]));
+      continue;
+    }
+
+    const errText = await res.text();
+    if (res.status === 429) {
+      throw new Error(
+        'Limite da API Gemini atingido. Configure uma chave Groq nas configurações ou aguarde alguns minutos.'
+      );
+    }
+    throw new Error(`Gemini API error ${res.status}: ${errText}`);
   }
-
-  const data = await res.json();
-  const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
-  if (!text) throw new Error('Gemini returned empty response');
-  return text;
 }
 
 // ─── Groq API (fallback) ──────────────────────────────────────────────────────
@@ -240,22 +255,33 @@ export async function generateMinutes(meeting, normalizedTranscript, onProgress)
 
   try {
     if (aiProvider === 'gemini' && geminiApiKey) {
-      return await callGemini(geminiApiKey, prompt);
+      return await callGemini(geminiApiKey, prompt, 'gemini-2.0-flash', onProgress);
     } else if (aiProvider === 'groq' && groqApiKey) {
       return await callGroq(groqApiKey, prompt);
     } else if (geminiApiKey) {
-      return await callGemini(geminiApiKey, prompt);
+      return await callGemini(geminiApiKey, prompt, 'gemini-2.0-flash', onProgress);
     } else if (groqApiKey) {
       return await callGroq(groqApiKey, prompt);
     } else {
       throw new Error('Nenhuma API key configurada. Acesse as opções da extensão para configurar.');
     }
   } catch (err) {
-    // If primary fails, try fallback
-    if (aiProvider === 'gemini' && groqApiKey) {
-      onProgress?.('Gemini falhou, tentando Groq...');
+    const is429 = err.message.includes('Limite da API Gemini') || err.message.includes('429');
+
+    // Fallback 1: try gemini-1.5-flash (separate quota)
+    if (is429 && geminiApiKey) {
+      onProgress?.('Tentando gemini-1.5-flash...');
+      try {
+        return await callGemini(geminiApiKey, prompt, 'gemini-1.5-flash', onProgress);
+      } catch (_) { /* fall through to Groq */ }
+    }
+
+    // Fallback 2: Groq
+    if (groqApiKey) {
+      onProgress?.('Gemini indisponível, usando Groq...');
       return await callGroq(groqApiKey, prompt);
     }
+
     throw err;
   }
 }
