@@ -19,58 +19,65 @@
 
   <!-- ── Card: AI Provider ─────────────────────────────────────── -->
   <div class="card">
-    <h2>🤖 Provedor de IA para Geração de Atas</h2>
+    <h2>🤖 Provedores de IA</h2>
     <p class="card-desc">
-      Escolha o provedor de IA. <strong>Groq é recomendado</strong> — gratuito e sem limite diário de requisições.
-      O Gemini também é gratuito mas tem cota limitada (1.500 req/dia).
+      Configure as chaves de <strong>ambos os provedores</strong> para ativar o
+      <strong>roteamento inteligente automático</strong>: reuniões longas são enviadas ao
+      <strong>Gemini</strong> (contexto de 1 milhão de tokens) e reuniões curtas ao
+      <strong>Groq</strong> (mais rápido). O radio abaixo define a preferência quando
+      ambos estão disponíveis e o tamanho da reunião cabe nos dois.
     </p>
 
     <div class="provider-grid">
-      <label class="provider-card selected" id="cardGroq">
+      <label class="provider-card" id="cardGroq">
         <input type="radio" name="aiProvider" value="groq" checked>
         <div class="p-name">Groq</div>
         <div class="p-desc">llama-3.3-70b</div>
-        <span class="p-badge">Recomendado</span>
+        <span class="p-badge">Rápido</span>
       </label>
       <label class="provider-card" id="cardGemini">
         <input type="radio" name="aiProvider" value="gemini">
         <div class="p-name">Google Gemini</div>
         <div class="p-desc">gemini-2.0-flash</div>
-        <span class="p-badge">Alternativo</span>
+        <span class="p-badge p-badge-blue">Contexto longo</span>
       </label>
-    </div>
-
-    <!-- Gemini key -->
-    <div class="form-group" id="geminiKeyGroup" style="display:none;">
-      <label>
-        API Key do Gemini
-        <span class="optional">(obrigatório para Gemini)</span>
-      </label>
-      <div class="input-row">
-        <input type="password" id="geminiApiKey" placeholder="AIza...">
-        <button class="eye-btn" data-target="geminiApiKey">👁</button>
-      </div>
-      <p class="hint">
-        Obtenha sua key gratuita em
-        <a href="https://aistudio.google.com/app/apikey" target="_blank">Google AI Studio</a>
-        — clique em "Create API key".
-      </p>
     </div>
 
     <!-- Groq key -->
     <div class="form-group" id="groqKeyGroup">
       <label>
         API Key do Groq
-        <span class="optional">(obrigatório para Groq)</span>
+        <span class="optional">(gratuito — recomendado para reuniões curtas)</span>
       </label>
       <div class="input-row">
         <input type="password" id="groqApiKey" placeholder="gsk_...">
         <button class="eye-btn" data-target="groqApiKey">👁</button>
+        <button class="test-btn" data-provider="groq">Testar</button>
       </div>
+      <div class="test-result" id="testGroqResult"></div>
       <p class="hint">
         Crie uma conta gratuita em
         <a href="https://console.groq.com" target="_blank">console.groq.com</a>
         e gere uma API key.
+      </p>
+    </div>
+
+    <!-- Gemini key -->
+    <div class="form-group" id="geminiKeyGroup">
+      <label>
+        API Key do Gemini
+        <span class="optional">(gratuito — usado automaticamente em reuniões longas)</span>
+      </label>
+      <div class="input-row">
+        <input type="password" id="geminiApiKey" placeholder="AIza...">
+        <button class="eye-btn" data-target="geminiApiKey">👁</button>
+        <button class="test-btn" data-provider="gemini">Testar</button>
+      </div>
+      <div class="test-result" id="testGeminiResult"></div>
+      <p class="hint">
+        Obtenha sua key gratuita em
+        <a href="https://aistudio.google.com/app/apikey" target="_blank">Google AI Studio</a>
+        — clique em "Create API key". Cota: 1.500 req/dia.
       </p>
     </div>
   </div>

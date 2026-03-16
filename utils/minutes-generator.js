@@ -4,9 +4,16 @@
 
 import { formatTranscriptForPrompt } from './text-normalizer.js';
 
-// ─── Transcript truncation for Groq (lower context limits) ───────────────────
-// Groq free tier: ~12000 TPM. Com max_tokens=8192 para resposta, sobram ~3800
-// tokens para o prompt (~15000 chars). Reservamos 10000 chars para o transcript.
+// ─── Token estimation & smart routing ────────────────────────────────────────
+// Estimativa: 1 token ≈ 4 chars (português/inglês).
+// Groq free tier: ~12000 TPM total (input + output). Com max_tokens=8192 de
+// resposta e ~500 tokens de template, sobram ~3300 tokens para o transcript.
+// Usamos 10000 chars (~2500 tokens) como budget seguro.
+//
+// Regra de roteamento automático:
+//   transcript > budget  →  usa Gemini (1M context) se disponível
+//   transcript ≤ budget  →  usa a preferência do usuário (Groq ou Gemini)
+//   sem Gemini e longo   →  trunca para Groq (último recurso)
 
 const GROQ_TRANSCRIPT_CHAR_BUDGET = 10_000;
 
@@ -275,15 +282,42 @@ Seja preciso e mantenha todas as informações ditas.`;
 // ─── Main entry point ─────────────────────────────────────────────────────────
 
 export async function generateMinutes(meeting, normalizedTranscript, onProgress) {
-  const { aiProvider = 'gemini', geminiApiKey, groqApiKey } = await chrome.storage.sync.get([
+  const { aiProvider = 'groq', geminiApiKey, groqApiKey } = await chrome.storage.sync.get([
     'aiProvider',
     'geminiApiKey',
     'groqApiKey',
   ]);
 
-  // Gemini suporta contextos longos; Groq tem limite menor — truncamos se necessário.
-  const prompt = buildPrompt(meeting, normalizedTranscript);
+  if (!geminiApiKey && !groqApiKey) {
+    throw new Error('Nenhuma API key configurada. Acesse as opções da extensão para configurar.');
+  }
 
+  // ── Roteamento inteligente por tamanho de transcrição ──────────────────────
+  const transcriptText   = formatTranscriptForPrompt(normalizedTranscript);
+  const fitsGroq         = transcriptText.length <= GROQ_TRANSCRIPT_CHAR_BUDGET;
+  const approxTokens     = Math.ceil(transcriptText.length / 4);
+
+  // Decide qual provedor usar:
+  //  1. Transcrição longa E Gemini disponível → Gemini (contexto de 1M tokens)
+  //  2. Apenas Gemini configurado             → Gemini
+  //  3. Apenas Groq configurado               → Groq (trunca se necessário)
+  //  4. Ambos disponíveis + cabe no Groq      → preferência do usuário
+  let effectiveProvider;
+  if (!fitsGroq && geminiApiKey) {
+    effectiveProvider = 'gemini';
+    onProgress?.(
+      `Reunião longa (~${approxTokens} tokens) — usando Gemini automaticamente para melhor qualidade`
+    );
+  } else if (geminiApiKey && !groqApiKey) {
+    effectiveProvider = 'gemini';
+  } else if (groqApiKey && !geminiApiKey) {
+    effectiveProvider = 'groq';
+  } else {
+    effectiveProvider = aiProvider; // preferência do usuário
+  }
+
+  // Prompt completo para Gemini; truncado (se necessário) para Groq
+  const geminiPrompt = buildPrompt(meeting, normalizedTranscript);
   const buildGroqPrompt = () => {
     const { chunks, truncated } = truncateTranscriptForGroq(normalizedTranscript);
     if (truncated) {
@@ -295,30 +329,24 @@ export async function generateMinutes(meeting, normalizedTranscript, onProgress)
   onProgress?.('Gerando ata com IA...');
 
   try {
-    if (aiProvider === 'gemini' && geminiApiKey) {
-      return await callGemini(geminiApiKey, prompt, 'gemini-2.0-flash', onProgress);
-    } else if (aiProvider === 'groq' && groqApiKey) {
-      return await callGroq(groqApiKey, buildGroqPrompt());
-    } else if (geminiApiKey) {
-      return await callGemini(geminiApiKey, prompt, 'gemini-2.0-flash', onProgress);
-    } else if (groqApiKey) {
-      return await callGroq(groqApiKey, buildGroqPrompt());
+    if (effectiveProvider === 'gemini') {
+      return await callGemini(geminiApiKey, geminiPrompt, 'gemini-2.0-flash', onProgress);
     } else {
-      throw new Error('Nenhuma API key configurada. Acesse as opções da extensão para configurar.');
+      return await callGroq(groqApiKey, buildGroqPrompt());
     }
   } catch (err) {
     const is429 = err.message.includes('Limite da API Gemini') || err.message.includes('429');
 
-    // Fallback 1: try gemini-1.5-flash (separate quota)
+    // Fallback 1: gemini-1.5-flash (cota separada)
     if (is429 && geminiApiKey) {
       onProgress?.('Tentando gemini-1.5-flash...');
       try {
-        return await callGemini(geminiApiKey, prompt, 'gemini-1.5-flash', onProgress);
-      } catch (_) { /* fall through to Groq */ }
+        return await callGemini(geminiApiKey, geminiPrompt, 'gemini-1.5-flash', onProgress);
+      } catch (_) { /* continua para Groq */ }
     }
 
-    // Fallback 2: Groq (com transcript truncado)
-    if (groqApiKey) {
+    // Fallback 2: Groq (com transcript truncado se necessário)
+    if (groqApiKey && effectiveProvider !== 'groq') {
       onProgress?.('Gemini indisponível, usando Groq...');
       return await callGroq(groqApiKey, buildGroqPrompt());
     }

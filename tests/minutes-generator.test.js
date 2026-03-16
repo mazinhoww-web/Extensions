@@ -94,17 +94,63 @@ describe('generateMinutes', () => {
     expect(calledUrl).toContain('groq')
   })
 
-  it('deve_usar_gemini_por_padrao_quando_ambas_as_chaves_estao_presentes', async () => {
+  it('deve_usar_provedor_preferencial_quando_transcript_cabe_nos_dois', async () => {
     chrome._syncStore.aiProvider = 'gemini'
     chrome._syncStore.geminiApiKey = 'chave-gemini'
     chrome._syncStore.groqApiKey = 'chave-groq'
 
     global.fetch = vi.fn().mockResolvedValue(geminiOkResponse('resposta gemini'))
 
-    await generateMinutes(meetingFixture(), [])
+    await generateMinutes(meetingFixture(), transcriptFixture())
 
     const [calledUrl] = fetch.mock.calls[0]
     expect(calledUrl).toContain('gemini')
+  })
+
+  it('deve_rotear_para_gemini_automaticamente_quando_transcript_e_longo', async () => {
+    chrome._syncStore.aiProvider = 'groq'   // preferência é Groq...
+    chrome._syncStore.geminiApiKey = 'chave-gemini'
+    chrome._syncStore.groqApiKey   = 'chave-groq'
+
+    // Transcript longo (>10000 chars)
+    const longTranscript = Array.from({ length: 300 }, (_, i) => ({
+      speaker: i % 2 === 0 ? 'Ana' : 'Bob',
+      text: `Trecho ${i}: discussão sobre o projeto com detalhes técnicos e decisões importantes da sprint atual.`,
+      timestamp: 1000 + i * 9000,
+      source: 'caption',
+    }))
+
+    global.fetch = vi.fn().mockResolvedValue(geminiOkResponse('ata pelo gemini'))
+
+    await generateMinutes(meetingFixture(), longTranscript)
+
+    // ...mas deve ter usado Gemini por causa do tamanho
+    const [calledUrl] = fetch.mock.calls[0]
+    expect(calledUrl).toContain('gemini')
+  })
+
+  it('deve_usar_gemini_quando_so_gemini_esta_configurado', async () => {
+    chrome._syncStore.geminiApiKey = 'chave-gemini'
+    // sem groqApiKey
+
+    global.fetch = vi.fn().mockResolvedValue(geminiOkResponse('ata'))
+
+    await generateMinutes(meetingFixture(), transcriptFixture())
+
+    const [calledUrl] = fetch.mock.calls[0]
+    expect(calledUrl).toContain('gemini')
+  })
+
+  it('deve_usar_groq_quando_so_groq_esta_configurado', async () => {
+    chrome._syncStore.groqApiKey = 'chave-groq'
+    // sem geminiApiKey
+
+    global.fetch = vi.fn().mockResolvedValue(groqOkResponse('ata'))
+
+    await generateMinutes(meetingFixture(), transcriptFixture())
+
+    const [calledUrl] = fetch.mock.calls[0]
+    expect(calledUrl).toContain('groq')
   })
 
   it('deve_incluir_titulo_da_reuniao_no_prompt_enviado_a_api', async () => {

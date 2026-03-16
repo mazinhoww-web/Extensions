@@ -15,36 +15,31 @@ async function loadSettings() {
     'deleteAudioAfter',
   ]);
 
-  // Provider
+  // Provider preference
   const provider = settings.aiProvider || 'groq';
-  const radios = document.querySelectorAll('input[name="aiProvider"]');
-  radios.forEach((r) => {
+  document.querySelectorAll('input[name="aiProvider"]').forEach((r) => {
     r.checked = r.value === provider;
   });
   updateProviderUI(provider);
 
   // API keys
-  if (settings.geminiApiKey) {
-    document.getElementById('geminiApiKey').value = settings.geminiApiKey;
-  }
-  if (settings.groqApiKey) {
-    document.getElementById('groqApiKey').value = settings.groqApiKey;
-  }
+  if (settings.geminiApiKey) document.getElementById('geminiApiKey').value = settings.geminiApiKey;
+  if (settings.groqApiKey)   document.getElementById('groqApiKey').value   = settings.groqApiKey;
 
   // Language
   const lang = document.getElementById('language');
   if (lang && settings.language) lang.value = settings.language;
 
   // Toggles (default to true if undefined)
-  const toggles = {
-    showOverlay: settings.showOverlay !== false,
-    includeFullTranscript: !!settings.includeFullTranscript,
-    audioQualityHigh: settings.audioQualityHigh !== false,
-    deleteAudioAfter: settings.deleteAudioAfter !== false,
+  const toggleDefaults = {
+    showOverlay: true,
+    includeFullTranscript: false,
+    audioQualityHigh: true,
+    deleteAudioAfter: true,
   };
-  Object.entries(toggles).forEach(([id, val]) => {
+  Object.entries(toggleDefaults).forEach(([id, def]) => {
     const el = document.getElementById(id);
-    if (el) el.checked = val;
+    if (el) el.checked = settings[id] !== undefined ? settings[id] : def;
   });
 
   // Speaker gap
@@ -56,28 +51,26 @@ async function loadSettings() {
 
 async function saveSettings() {
   const provider = document.querySelector('input[name="aiProvider"]:checked')?.value || 'groq';
+  const geminiKey = document.getElementById('geminiApiKey').value.trim();
+  const groqKey   = document.getElementById('groqApiKey').value.trim();
 
-  const settings = {
+  if (!geminiKey && !groqKey) {
+    alert('Por favor, insira ao menos uma API key (Groq ou Gemini) para usar a geração de atas com IA.');
+    return;
+  }
+
+  await chrome.storage.sync.set({
     aiProvider: provider,
-    geminiApiKey: document.getElementById('geminiApiKey').value.trim(),
-    groqApiKey: document.getElementById('groqApiKey').value.trim(),
+    geminiApiKey: geminiKey,
+    groqApiKey: groqKey,
     language: document.getElementById('language').value,
     showOverlay: document.getElementById('showOverlay').checked,
     includeFullTranscript: document.getElementById('includeFullTranscript').checked,
     audioQualityHigh: document.getElementById('audioQualityHigh').checked,
     speakerGap: parseInt(document.getElementById('speakerGap').value, 10),
     deleteAudioAfter: document.getElementById('deleteAudioAfter').checked,
-  };
+  });
 
-  // Validate: at least one API key
-  if (!settings.geminiApiKey && !settings.groqApiKey) {
-    alert('Por favor, insira ao menos uma API key (Gemini ou Groq) para usar a geração de atas com IA.');
-    return;
-  }
-
-  await chrome.storage.sync.set(settings);
-
-  // Show success feedback
   const status = document.getElementById('saveStatus');
   if (status) {
     status.classList.add('visible');
@@ -85,25 +78,11 @@ async function saveSettings() {
   }
 }
 
-// ─── Provider UI toggle ───────────────────────────────────────────────────────
+// ─── Provider UI (highlight selection only — both key groups stay visible) ────
 
 function updateProviderUI(provider) {
-  const geminiCard = document.getElementById('cardGemini');
-  const groqCard = document.getElementById('cardGroq');
-  const geminiGroup = document.getElementById('geminiKeyGroup');
-  const groqGroup = document.getElementById('groqKeyGroup');
-
-  if (provider === 'gemini') {
-    geminiCard?.classList.add('selected');
-    groqCard?.classList.remove('selected');
-    if (geminiGroup) geminiGroup.style.display = 'block';
-    if (groqGroup) groqGroup.style.display = 'none';
-  } else {
-    groqCard?.classList.add('selected');
-    geminiCard?.classList.remove('selected');
-    if (groqGroup) groqGroup.style.display = 'block';
-    if (geminiGroup) geminiGroup.style.display = 'none';
-  }
+  document.getElementById('cardGemini')?.classList.toggle('selected', provider === 'gemini');
+  document.getElementById('cardGroq')?.classList.toggle('selected',   provider === 'groq');
 }
 
 // ─── Show/hide password ───────────────────────────────────────────────────────
@@ -111,15 +90,79 @@ function updateProviderUI(provider) {
 function setupEyeButtons() {
   document.querySelectorAll('.eye-btn').forEach((btn) => {
     btn.addEventListener('click', () => {
-      const targetId = btn.dataset.target;
-      const input = document.getElementById(targetId);
+      const input = document.getElementById(btn.dataset.target);
       if (!input) return;
-      if (input.type === 'password') {
-        input.type = 'text';
-        btn.textContent = '🙈';
-      } else {
-        input.type = 'password';
-        btn.textContent = '👁';
+      if (input.type === 'password') { input.type = 'text'; btn.textContent = '🙈'; }
+      else                           { input.type = 'password'; btn.textContent = '👁'; }
+    });
+  });
+}
+
+// ─── API key test ─────────────────────────────────────────────────────────────
+
+async function testGeminiKey(key) {
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${key}`;
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      contents: [{ parts: [{ text: 'Responda apenas: OK' }] }],
+      generationConfig: { maxOutputTokens: 5 },
+    }),
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data?.error?.message || `Erro HTTP ${res.status}`);
+  }
+}
+
+async function testGroqKey(key) {
+  const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` },
+    body: JSON.stringify({
+      model: 'llama-3.3-70b-versatile',
+      messages: [{ role: 'user', content: 'OK' }],
+      max_tokens: 5,
+    }),
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data?.error?.message || `Erro HTTP ${res.status}`);
+  }
+}
+
+function setupTestButtons() {
+  document.querySelectorAll('.test-btn').forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      const provider  = btn.dataset.provider;
+      const keyInput  = document.getElementById(provider === 'gemini' ? 'geminiApiKey' : 'groqApiKey');
+      const resultEl  = document.getElementById(provider === 'gemini' ? 'testGeminiResult' : 'testGroqResult');
+      if (!resultEl) return;
+
+      const key = keyInput?.value.trim();
+      if (!key) {
+        resultEl.textContent = '⚠️ Insira uma API key para testar';
+        resultEl.className = 'test-result warn';
+        return;
+      }
+
+      btn.disabled = true;
+      btn.textContent = 'Testando…';
+      resultEl.textContent = '⏳ Verificando chave…';
+      resultEl.className = 'test-result loading';
+
+      try {
+        if (provider === 'gemini') await testGeminiKey(key);
+        else                       await testGroqKey(key);
+        resultEl.textContent = '✅ Chave válida';
+        resultEl.className = 'test-result success';
+      } catch (err) {
+        resultEl.textContent = `❌ ${err.message}`;
+        resultEl.className = 'test-result error';
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Testar';
       }
     });
   });
@@ -129,19 +172,13 @@ function setupEyeButtons() {
 
 function setupProviderRadios() {
   document.querySelectorAll('input[name="aiProvider"]').forEach((radio) => {
-    radio.addEventListener('change', () => {
-      updateProviderUI(radio.value);
-    });
+    radio.addEventListener('change', () => updateProviderUI(radio.value));
   });
 
-  // Also clicking the card labels
   document.querySelectorAll('.provider-card').forEach((card) => {
     card.addEventListener('click', () => {
       const radio = card.querySelector('input[type="radio"]');
-      if (radio) {
-        radio.checked = true;
-        updateProviderUI(radio.value);
-      }
+      if (radio) { radio.checked = true; updateProviderUI(radio.value); }
     });
   });
 }
@@ -152,14 +189,11 @@ document.addEventListener('DOMContentLoaded', async () => {
   await loadSettings();
   setupEyeButtons();
   setupProviderRadios();
+  setupTestButtons();
 
   document.getElementById('btnSave')?.addEventListener('click', saveSettings);
 
-  // Allow Ctrl+S to save
   document.addEventListener('keydown', (e) => {
-    if ((e.ctrlKey || e.metaKey) && e.key === 's') {
-      e.preventDefault();
-      saveSettings();
-    }
+    if ((e.ctrlKey || e.metaKey) && e.key === 's') { e.preventDefault(); saveSettings(); }
   });
 });
