@@ -152,6 +152,7 @@ async function handleMessage(msg, sender) {
           existing.platform = 'hybrid';
           await chrome.storage.local.set({ currentMeeting: existing });
           notifyPopup({ type: 'MEETING_STARTED', meeting: existing });
+          startKeepalive();
           return { success: true, meeting: existing };
         }
         // Same platform or already hybrid — return existing meeting
@@ -160,6 +161,10 @@ async function handleMessage(msg, sender) {
       const meeting = await startMeeting(platform, msg.title, sender.tab?.id ?? null);
       // Notify any open popup
       notifyPopup({ type: 'MEETING_STARTED', meeting });
+      // Set badge and start keepalive alarm so SW stays alive during long meetings
+      chrome.action.setBadgeText({ text: 'REC' });
+      chrome.action.setBadgeBackgroundColor({ color: '#dc2626' });
+      startKeepalive();
       return { success: true, meeting };
     }
 
@@ -184,6 +189,8 @@ async function handleMessage(msg, sender) {
     case 'END_MEETING': {
       const meeting = await endMeeting();
       notifyPopup({ type: 'MEETING_ENDED', meeting });
+      chrome.action.setBadgeText({ text: '' });
+      stopKeepalive();
       return { success: true, meeting };
     }
 
@@ -206,6 +213,8 @@ async function handleMessage(msg, sender) {
 
     case 'CLEAR_MEETING': {
       await clearCurrentMeeting();
+      chrome.action.setBadgeText({ text: '' });
+      stopKeepalive();
       return { success: true };
     }
 
@@ -226,6 +235,26 @@ async function handleMessage(msg, sender) {
       return { error: `Unknown message type: ${msg.type}` };
   }
 }
+
+// ─── Service Worker Keepalive ─────────────────────────────────────────────────
+// MV3 service workers are killed after ~30s of inactivity. During long meetings
+// we use a repeating alarm (~24s period) to keep the SW alive.
+
+const KEEPALIVE_ALARM = 'meetscribe-keepalive';
+
+function startKeepalive() {
+  chrome.alarms.create(KEEPALIVE_ALARM, { periodInMinutes: 0.4 });
+}
+
+function stopKeepalive() {
+  chrome.alarms.clear(KEEPALIVE_ALARM);
+}
+
+chrome.alarms.onAlarm.addListener((alarm) => {
+  if (alarm.name === KEEPALIVE_ALARM) {
+    // No-op: merely wakes the service worker so it stays alive
+  }
+});
 
 // ─── Notify Popup ─────────────────────────────────────────────────────────────
 
