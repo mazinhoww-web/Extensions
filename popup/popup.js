@@ -581,11 +581,25 @@ async function loadHistory() {
   });
 }
 
-// ─── Cancel recording ─────────────────────────────────────────────────────────
+// ─── Cancel recording (with confirmation modal) ────────────────────────────────
 
-async function cancelRecording() {
-  // confirm() doesn't work in extension popups — just cancel directly
+function showCancelConfirm() {
+  const overlay = document.getElementById('confirmCancelOverlay');
+  if (!overlay) { executeCancelRecording(); return; } // fallback if HTML missing
+  document.getElementById('confirmCancelTitleEl').textContent = t('confirmCancelTitle');
+  document.getElementById('confirmCancelMsgEl').textContent   = t('confirmCancelMsg');
+  document.getElementById('confirmCancelNo').textContent      = t('confirmCancelBack');
+  document.getElementById('confirmCancelYes').textContent     = t('confirmCancelYes');
+  overlay.style.display = 'flex';
+}
 
+function hideCancelConfirm() {
+  const overlay = document.getElementById('confirmCancelOverlay');
+  if (overlay) overlay.style.display = 'none';
+}
+
+async function executeCancelRecording() {
+  hideCancelConfirm();
   stopTimer();
 
   try {
@@ -694,7 +708,9 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   // Stop recording
   document.getElementById('btnStop')?.addEventListener('click', stopAndGenerate);
-  document.getElementById('btnCancelRecording')?.addEventListener('click', cancelRecording);
+  document.getElementById('btnCancelRecording')?.addEventListener('click', showCancelConfirm);
+  document.getElementById('confirmCancelNo')?.addEventListener('click', hideCancelConfirm);
+  document.getElementById('confirmCancelYes')?.addEventListener('click', executeCancelRecording);
 
   // Minutes actions
   document.getElementById('btnCopyMinutes')?.addEventListener('click', async () => {

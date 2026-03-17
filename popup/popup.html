@@ -212,6 +212,20 @@
   </div>
 
   <!-- ══════════════════════════════════════════════════════
+       CANCEL CONFIRMATION MODAL
+  ══════════════════════════════════════════════════════ -->
+  <div id="confirmCancelOverlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:10001;align-items:center;justify-content:center;">
+    <div style="background:var(--surface);border-radius:14px;padding:20px;width:300px;max-width:90%;box-shadow:0 8px 32px rgba(0,0,0,0.25);text-align:center;">
+      <p style="font-size:14px;font-weight:600;margin-bottom:8px;" id="confirmCancelTitleEl"></p>
+      <p style="font-size:12px;color:var(--text-muted);margin-bottom:16px;" id="confirmCancelMsgEl"></p>
+      <div style="display:flex;gap:8px;justify-content:center;">
+        <button class="btn btn-outline btn-sm" id="confirmCancelNo"></button>
+        <button class="btn btn-danger btn-sm" id="confirmCancelYes"></button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════════════════
        ONBOARDING MODAL
   ══════════════════════════════════════════════════════ -->
   <div id="onboardingOverlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:10000;display:none;align-items:center;justify-content:center;">
