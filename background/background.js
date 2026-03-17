@@ -84,14 +84,36 @@ async function startMeeting(platform, title = '', tabId = null) {
   return meeting;
 }
 
-async function addCaptionChunk(chunk) {
+// ─── Caption chunk buffering ──────────────────────────────────────────────────
+// Each addCaptionChunk previously wrote the entire meeting object to storage.
+// In long meetings (500+ chunks) this becomes progressively slower.
+// We batch-flush every 5 chunks or every 10 seconds, whichever comes first.
+
+let captionBuffer = [];
+let captionFlushTimeout = null;
+
+async function flushCaptionBuffer() {
+  if (captionBuffer.length === 0) return;
+  clearTimeout(captionFlushTimeout);
+  captionFlushTimeout = null;
+  const toWrite = captionBuffer.splice(0);
   const meeting = await getCurrentMeeting();
   if (!meeting) return;
-  meeting.captionChunks.push(chunk);
+  meeting.captionChunks.push(...toWrite);
   await chrome.storage.local.set({ currentMeeting: meeting });
 }
 
+async function addCaptionChunk(chunk) {
+  captionBuffer.push(chunk);
+  if (captionBuffer.length >= 5) {
+    await flushCaptionBuffer();
+  } else if (!captionFlushTimeout) {
+    captionFlushTimeout = setTimeout(flushCaptionBuffer, 10000);
+  }
+}
+
 async function endMeeting() {
+  await flushCaptionBuffer(); // ensure buffered captions are persisted
   const meeting = await getCurrentMeeting();
   if (!meeting) return null;
   meeting.endTime = Date.now();
@@ -122,6 +144,9 @@ async function saveMeetingField(field, value) {
 }
 
 async function clearCurrentMeeting() {
+  captionBuffer = []; // discard unflushed captions — meeting is being cancelled
+  clearTimeout(captionFlushTimeout);
+  captionFlushTimeout = null;
   const meeting = await getCurrentMeeting();
   if (meeting) await deleteAudioChunks(meeting.id);
   await chrome.storage.local.remove('currentMeeting');
@@ -263,6 +288,14 @@ function notifyPopup(msg) {
     // Popup might not be open — ignore
   });
 }
+
+// ─── Flush captions before SW suspends ───────────────────────────────────────
+
+chrome.runtime.onSuspend.addListener(() => {
+  // Synchronous flush is not possible, but we attempt a best-effort write.
+  // Chrome gives ~2 seconds before hard-killing the SW.
+  flushCaptionBuffer().catch(() => {});
+});
 
 // ─── Content script injection on tab update ───────────────────────────────────
 // Handles SPAs where the content script may need re-injection
