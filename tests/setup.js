@@ -1,5 +1,13 @@
 import { vi } from 'vitest'
 
+// ─── URL.createObjectURL / revokeObjectURL ────────────────────────────────────
+// jsdom não implementa estas APIs; definir globalmente para testes.
+
+if (!URL.createObjectURL) {
+  URL.createObjectURL = vi.fn(() => 'blob:mock-url')
+  URL.revokeObjectURL = vi.fn()
+}
+
 // ─── Polyfills de Blob para jsdom ─────────────────────────────────────────────
 // jsdom não implementa Blob.prototype.text() nem .arrayBuffer()
 
@@ -63,13 +71,27 @@ global.chrome = {
   },
   runtime: {
     onMessage: { addListener: vi.fn() },
+    onSuspend: { addListener: vi.fn() },
     sendMessage: vi.fn().mockResolvedValue({}),
+    getManifest: vi.fn(() => ({ version: '1.0.0' })),
   },
   scripting: {
     executeScript: vi.fn().mockResolvedValue(undefined),
   },
   tabs: {
     onUpdated: { addListener: vi.fn() },
+  },
+  alarms: {
+    create: vi.fn(),
+    clear: vi.fn(),
+    onAlarm: { addListener: vi.fn() },
+  },
+  action: {
+    setBadgeText: vi.fn(),
+    setBadgeBackgroundColor: vi.fn(),
+  },
+  downloads: {
+    download: vi.fn((opts, cb) => { if (cb) cb(); }),
   },
 
   // Referências internas para reset nos testes

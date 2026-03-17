@@ -71,10 +71,13 @@
       </p>
 
       <!-- Hybrid mode toggle -->
-      <label style="display:flex;align-items:flex-start;gap:8px;margin-bottom:6px;cursor:pointer;">
+      <label style="display:flex;align-items:flex-start;gap:8px;margin-bottom:6px;cursor:pointer;"
+             title="Modo Híbrido: captura legendas da plataforma (remotos) e microfone (presenciais) ao mesmo tempo. Requer AssemblyAI para diarização dos participantes presenciais.">
         <input type="checkbox" id="hybridModeToggle" style="margin-top:2px;flex-shrink:0;">
         <span style="font-size:12px;">
-          <strong>Modo Híbrido</strong> — sala + remotos<br>
+          <strong>Modo Híbrido</strong> — sala + remotos
+          <span style="display:inline-block;width:14px;height:14px;border-radius:50%;background:var(--primary);color:#fff;font-size:9px;font-weight:700;text-align:center;line-height:14px;margin-left:4px;vertical-align:middle;cursor:help;"
+                title="Captura legendas da plataforma (participantes remotos) e microfone (participantes presenciais) simultaneamente. Requer AssemblyAI para diarização dos presenciais.">?</span><br>
           <span style="color:var(--text-muted);font-size:11px;">
             Captura legendas da plataforma (participantes remotos) e microfone (participantes presenciais) simultaneamente.
           </span>
@@ -208,6 +211,7 @@
   ══════════════════════════════════════════════════════ -->
   <div class="footer">
     <span id="footerVersion">MeetScribe</span>
+    <a id="footerChangelog" title="Ver novidades desta versão">Novidades</a>
     <a id="footerOptions">⚙️ Configurações</a>
   </div>
 

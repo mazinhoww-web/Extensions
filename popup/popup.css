@@ -87,8 +87,9 @@ body {
 
 /* ─── Sections (views) ───────────────────────────────────────────────────── */
 
-.section { display: none; padding: 16px; }
+.section { display: none; padding: 16px; opacity: 0; transition: opacity 0.2s ease; }
 .section.active { display: block; }
+.section.active.visible { opacity: 1; }
 
 /* ─── Idle view ──────────────────────────────────────────────────────────── */
 

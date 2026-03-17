@@ -54,10 +54,13 @@ const SAMPLE_UTTERANCES = [
 describe('transcribeWithAssemblyAI', () => {
   beforeEach(() => {
     vi.useFakeTimers()
+    // Pre-populate sync storage with a fake AssemblyAI key so getAssemblyAIKey() succeeds
+    chrome._syncStore.assemblyaiApiKey = 'test-assemblyai-key-12345'
   })
 
   afterEach(() => {
     vi.restoreAllMocks()
+    delete chrome._syncStore.assemblyaiApiKey
     vi.useRealTimers()
   })
 
@@ -158,7 +161,7 @@ describe('transcribeWithAssemblyAI', () => {
     await promise
 
     capturedHeaders.forEach((h) => {
-      expect(h.authorization).toBe('443d68fff20641a9a94bab1be3be9998')
+      expect(h.authorization).toBe('test-assemblyai-key-12345')
     })
   })
 

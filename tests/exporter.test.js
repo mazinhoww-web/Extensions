@@ -100,68 +100,82 @@ describe('exportTXT', () => {
 // ─── exportPDF ────────────────────────────────────────────────────────────────
 
 describe('exportPDF', () => {
-  let mockWindow
-
   beforeEach(() => {
-    mockWindow = {
-      document: { write: vi.fn(), close: vi.fn() },
-      print: vi.fn(),
-      onload: null,
-    }
-    vi.spyOn(window, 'open').mockReturnValue(mockWindow)
+    vi.clearAllMocks()
+    // Re-define URL mocks (the exportTXT afterEach deletes them)
+    URL.createObjectURL = vi.fn(() => 'blob:mock-url')
+    URL.revokeObjectURL = vi.fn()
   })
 
   afterEach(() => {
-    vi.restoreAllMocks()
+    delete URL.createObjectURL
+    delete URL.revokeObjectURL
   })
 
-  it('deve_abrir_nova_janela_para_impressao', () => {
+  it('deve_usar_chrome_downloads_quando_disponivel', () => {
     exportPDF('# Conteúdo', 'Minha Ata')
-    expect(window.open).toHaveBeenCalledWith('', '_blank')
+    expect(chrome.downloads.download).toHaveBeenCalled()
+    const opts = chrome.downloads.download.mock.calls[0][0]
+    expect(opts.url).toBe('blob:mock-url')
+    expect(opts.filename).toMatch(/\.html$/)
+    expect(opts.saveAs).toBe(true)
   })
 
-  it('deve_escrever_html_na_janela_aberta', () => {
+  it('deve_criar_blob_html_com_doctype', () => {
     exportPDF('# Título', 'Ata')
-    expect(mockWindow.document.write).toHaveBeenCalled()
-    const html = mockWindow.document.write.mock.calls[0][0]
-    expect(html).toContain('<!DOCTYPE html>')
+    expect(URL.createObjectURL).toHaveBeenCalled()
+    const blob = URL.createObjectURL.mock.calls[0][0]
+    expect(blob).toBeInstanceOf(Blob)
+    expect(blob.type).toContain('text/html')
   })
 
-  it('deve_incluir_o_conteudo_markdown_convertido_em_html', () => {
+  it('deve_incluir_conteudo_markdown_convertido_em_html', async () => {
     exportPDF('# Título da Reunião', 'Ata')
-    const html = mockWindow.document.write.mock.calls[0][0]
+    const blob = URL.createObjectURL.mock.calls[0][0]
+    const html = await blob.text()
     expect(html).toContain('<h1>')
     expect(html).toContain('Título da Reunião')
   })
 
-  it('deve_usar_o_titulo_fornecido_na_tag_title_do_html', () => {
+  it('deve_usar_titulo_fornecido_na_tag_title_do_html', async () => {
     exportPDF('Conteúdo', 'Reunião Sprint 42')
-    const html = mockWindow.document.write.mock.calls[0][0]
+    const blob = URL.createObjectURL.mock.calls[0][0]
+    const html = await blob.text()
     expect(html).toContain('<title>Reunião Sprint 42</title>')
   })
 
-  it('deve_usar_titulo_padrao_quando_nao_fornecido', () => {
+  it('deve_usar_titulo_padrao_quando_nao_fornecido', async () => {
     exportPDF('Conteúdo')
-    const html = mockWindow.document.write.mock.calls[0][0]
+    const blob = URL.createObjectURL.mock.calls[0][0]
+    const html = await blob.text()
     expect(html).toContain('Ata de Reunião')
   })
 
-  it('deve_fechar_o_documento_apos_escrever', () => {
+  it('deve_incluir_doctype_no_html_gerado', async () => {
     exportPDF('Conteúdo', 'Ata')
-    expect(mockWindow.document.close).toHaveBeenCalled()
+    const blob = URL.createObjectURL.mock.calls[0][0]
+    const html = await blob.text()
+    expect(html).toContain('<!DOCTYPE html>')
   })
 
-  it('deve_converter_bold_markdown_em_tag_strong_no_html', () => {
+  it('deve_converter_bold_markdown_em_tag_strong_no_html', async () => {
     exportPDF('**decisão importante**', 'Ata')
-    const html = mockWindow.document.write.mock.calls[0][0]
+    const blob = URL.createObjectURL.mock.calls[0][0]
+    const html = await blob.text()
     expect(html).toContain('<strong>decisão importante</strong>')
   })
 
-  it('deve_alertar_quando_popup_e_bloqueado_pelo_navegador', () => {
-    vi.spyOn(window, 'open').mockReturnValue(null)
-    const alertSpy = vi.spyOn(window, 'alert').mockImplementation(() => {})
-    exportPDF('Conteúdo', 'Ata')
-    expect(alertSpy).toHaveBeenCalled()
+  it('deve_chamar_triggerDownload_como_fallback_sem_chrome_downloads', () => {
+    // Temporarily remove chrome.downloads to test fallback path
+    const originalDownloads = chrome.downloads
+    delete chrome.downloads
+    try {
+      exportPDF('Conteúdo', 'Ata')
+      // Falls back to triggerDownload which calls URL.createObjectURL + <a>.click()
+      expect(URL.createObjectURL).toHaveBeenCalled()
+    } finally {
+      chrome.downloads = originalDownloads
+    }
   })
 })
 

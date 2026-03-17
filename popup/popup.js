@@ -20,8 +20,12 @@ let startTime = null;
 // ─── View management ──────────────────────────────────────────────────────────
 
 function showView(name) {
-  document.querySelectorAll('.section').forEach((s) => s.classList.remove('active'));
-  document.getElementById(`view${capitalize(name)}`)?.classList.add('active');
+  document.querySelectorAll('.section').forEach((s) => s.classList.remove('active', 'visible'));
+  const next = document.getElementById(`view${capitalize(name)}`);
+  if (next) {
+    next.classList.add('active');
+    requestAnimationFrame(() => next.classList.add('visible'));
+  }
   currentView = name;
 }
 
@@ -210,21 +214,40 @@ async function warnIfNoAssemblyAI() {
   }
 }
 
+// ─── Button loading state helpers ─────────────────────────────────────────────
+
+function setButtonLoading(btnId, loadingText) {
+  const btn = document.getElementById(btnId);
+  if (!btn) return;
+  btn.disabled = true;
+  btn._origText = btn.textContent;
+  btn.textContent = loadingText;
+}
+
+function clearButtonLoading(btnId) {
+  const btn = document.getElementById(btnId);
+  if (!btn) return;
+  btn.disabled = false;
+  if (btn._origText) btn.textContent = btn._origText;
+}
+
 // ─── Start recording (platform mode) ─────────────────────────────────────────
 
 async function startPlatformRecording() {
   const isHybrid = document.getElementById('hybridModeToggle')?.checked;
   if (isHybrid) return startHybridRecording();
 
+  setButtonLoading('btnStartPlatform', 'Iniciando...');
   try {
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-    if (!tab) return showError('Nenhuma aba ativa encontrada.');
+    if (!tab) { clearButtonLoading('btnStartPlatform'); return showError('Nenhuma aba ativa encontrada.'); }
 
     const url = tab.url || '';
     const isMeetingUrl = url.includes('meet.google.com') ||
       url.includes('teams.microsoft.com') || url.includes('teams.live.com');
 
     if (!isMeetingUrl) {
+      clearButtonLoading('btnStartPlatform');
       showError('Acesse uma reunião no Google Meet ou Microsoft Teams primeiro, depois clique em Iniciar.');
       return;
     }
@@ -244,6 +267,7 @@ async function startPlatformRecording() {
 
     enterRecordingView(meeting);
   } catch (err) {
+    clearButtonLoading('btnStartPlatform');
     showError(friendlyError(err));
   }
 }
@@ -291,6 +315,7 @@ async function startHybridRecording() {
 // ─── Start recording (offline mode — opens dedicated recorder page) ───────────
 
 async function startMicRecording() {
+  setButtonLoading('btnStartMic', 'Iniciando...');
   // Warn (non-blocking) if AssemblyAI is not configured — diarization won't work
   await warnIfNoAssemblyAI();
   const title = document.getElementById('meetingTitleInput')?.value.trim() || '';
@@ -332,6 +357,7 @@ function enterRecordingView(m) {
 // ─── Stop recording and generate minutes ─────────────────────────────────────
 
 async function stopAndGenerate() {
+  setButtonLoading('btnStop', 'Gerando...');
   stopTimer();
   showView('generating');
   setHeaderBadge('Gerando...', '');
@@ -834,6 +860,15 @@ document.addEventListener('DOMContentLoaded', async () => {
     const { version } = chrome.runtime.getManifest();
     versionEl.textContent = `MeetScribe v${version}`;
   }
+
+  // Changelog link — opens ROADMAP.md or a GitHub releases page if available
+  document.getElementById('footerChangelog')?.addEventListener('click', () => {
+    const changelogUrl = chrome.runtime.getURL('PRIVACY_POLICY.md');
+    // Open the extension's own page (ROADMAP when available, fallback to privacy policy)
+    chrome.tabs.create({ url: 'https://github.com/mazinhoww/meetscribe/releases' }).catch(() => {
+      chrome.tabs.create({ url: changelogUrl });
+    });
+  });
 
   // i18n: load language and apply to static UI elements
   await initI18n();

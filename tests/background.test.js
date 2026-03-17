@@ -91,14 +91,23 @@ describe('START_MEETING', () => {
 // ─── CAPTION_CHUNK ────────────────────────────────────────────────────────────
 
 describe('CAPTION_CHUNK', () => {
+  // Captions are batched in memory and flushed after 5 chunks or 10s.
+  // To verify persistence, we send 5 chunks (triggers auto-flush) or end the meeting.
+
   it('deve_adicionar_chunk_a_reuniao_ativa', async () => {
     await sendMessage('START_MEETING', { platform: 'google-meet' })
 
-    const chunk = { speaker: 'Ana', text: 'Bom dia', timestamp: Date.now() }
+    const t = Date.now()
+    const chunk = { speaker: 'Ana', text: 'Bom dia', timestamp: t }
+    // Send 5 chunks to trigger flush (batch threshold)
     await sendMessage('CAPTION_CHUNK', { data: chunk })
+    await sendMessage('CAPTION_CHUNK', { data: { speaker: 'B', text: 'x', timestamp: t + 100 } })
+    await sendMessage('CAPTION_CHUNK', { data: { speaker: 'C', text: 'y', timestamp: t + 200 } })
+    await sendMessage('CAPTION_CHUNK', { data: { speaker: 'D', text: 'z', timestamp: t + 300 } })
+    await sendMessage('CAPTION_CHUNK', { data: { speaker: 'E', text: 'w', timestamp: t + 400 } })
 
     const meeting = chrome._localStore.currentMeeting
-    expect(meeting.captionChunks).toHaveLength(1)
+    expect(meeting.captionChunks).toHaveLength(5)
     expect(meeting.captionChunks[0].speaker).toBe('Ana')
   })
 
@@ -106,11 +115,13 @@ describe('CAPTION_CHUNK', () => {
     await sendMessage('START_MEETING', { platform: 'google-meet' })
 
     const t = Date.now()
-    await sendMessage('CAPTION_CHUNK', { data: { speaker: 'Ana', text: 'Primeira', timestamp: t } })
-    await sendMessage('CAPTION_CHUNK', { data: { speaker: 'Bob', text: 'Segunda', timestamp: t + 1000 } })
+    // Send 5 chunks to trigger flush
+    for (let i = 0; i < 5; i++) {
+      await sendMessage('CAPTION_CHUNK', { data: { speaker: i < 3 ? 'Ana' : 'Bob', text: `msg${i}`, timestamp: t + i * 1000 } })
+    }
 
     const meeting = chrome._localStore.currentMeeting
-    expect(meeting.captionChunks).toHaveLength(2)
+    expect(meeting.captionChunks).toHaveLength(5)
   })
 
   it('deve_retornar_success_true', async () => {
@@ -195,8 +206,9 @@ describe('GET_AUDIO_CHUNKS', () => {
   it('deve_retornar_chunks_salvos_para_reuniao_ativa', async () => {
     await sendMessage('START_MEETING', { platform: 'google-meet' })
 
-    const blob = new Blob(['audio data'], { type: 'audio/webm' })
-    await sendMessage('AUDIO_CHUNK', { blob })
+    // AUDIO_CHUNK now expects audioData (Uint8Array array) and mimeType
+    const audioData = Array.from(new TextEncoder().encode('audio data'))
+    await sendMessage('AUDIO_CHUNK', { audioData, mimeType: 'audio/webm' })
 
     const { chunks } = await sendMessage('GET_AUDIO_CHUNKS')
     expect(chunks).toHaveLength(1)
