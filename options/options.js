@@ -1,5 +1,6 @@
 // MeetScribe — Options Page Script
 import { DEFAULT_SHORTCUTS, eventToShortcut, loadShortcuts, saveShortcuts } from '../utils/hotkeys.js';
+import { testAssemblyAIKey } from '../utils/assemblyai-transcriber.js';
 
 // ─── Load saved settings ──────────────────────────────────────────────────────
 
@@ -8,6 +9,7 @@ async function loadSettings() {
     'aiProvider',
     'geminiApiKey',
     'groqApiKey',
+    'assemblyaiApiKey',
     'language',
     'autoStartPlatform',
     'showOverlay',
@@ -24,8 +26,9 @@ async function loadSettings() {
   updateProviderUI(provider);
 
   // API keys
-  if (settings.geminiApiKey) document.getElementById('geminiApiKey').value = settings.geminiApiKey;
-  if (settings.groqApiKey)   document.getElementById('groqApiKey').value   = settings.groqApiKey;
+  if (settings.geminiApiKey)    document.getElementById('geminiApiKey').value    = settings.geminiApiKey;
+  if (settings.groqApiKey)      document.getElementById('groqApiKey').value      = settings.groqApiKey;
+  if (settings.assemblyaiApiKey) document.getElementById('assemblyaiApiKey').value = settings.assemblyaiApiKey;
 
   // Language
   const lang = document.getElementById('language');
@@ -50,8 +53,9 @@ async function loadSettings() {
 
 async function saveSettings() {
   const provider = document.querySelector('input[name="aiProvider"]:checked')?.value || 'groq';
-  const geminiKey = document.getElementById('geminiApiKey').value.trim();
-  const groqKey   = document.getElementById('groqApiKey').value.trim();
+  const geminiKey    = document.getElementById('geminiApiKey').value.trim();
+  const groqKey      = document.getElementById('groqApiKey').value.trim();
+  const assemblyKey  = document.getElementById('assemblyaiApiKey').value.trim();
 
   if (!geminiKey && !groqKey) {
     alert('Por favor, insira ao menos uma API key (Groq ou Gemini) para usar a geração de atas com IA.');
@@ -62,6 +66,7 @@ async function saveSettings() {
     aiProvider: provider,
     geminiApiKey: geminiKey,
     groqApiKey: groqKey,
+    assemblyaiApiKey: assemblyKey,
     language: document.getElementById('language').value,
     autoStartPlatform: document.getElementById('autoStartPlatform').checked,
     showOverlay: document.getElementById('showOverlay').checked,
@@ -153,9 +158,11 @@ async function testGroqKey(key) {
 function setupTestButtons() {
   document.querySelectorAll('.test-btn').forEach((btn) => {
     btn.addEventListener('click', async () => {
-      const provider  = btn.dataset.provider;
-      const keyInput  = document.getElementById(provider === 'gemini' ? 'geminiApiKey' : 'groqApiKey');
-      const resultEl  = document.getElementById(provider === 'gemini' ? 'testGeminiResult' : 'testGroqResult');
+      const provider = btn.dataset.provider;
+      const inputMap = { gemini: 'geminiApiKey', groq: 'groqApiKey', assemblyai: 'assemblyaiApiKey' };
+      const resultMap = { gemini: 'testGeminiResult', groq: 'testGroqResult', assemblyai: 'testAssemblyaiResult' };
+      const keyInput = document.getElementById(inputMap[provider]);
+      const resultEl = document.getElementById(resultMap[provider]);
       if (!resultEl) return;
 
       const key = keyInput?.value.trim();
@@ -171,8 +178,9 @@ function setupTestButtons() {
       resultEl.className = 'test-result loading';
 
       try {
-        if (provider === 'gemini') await testGeminiKey(key);
-        else                       await testGroqKey(key);
+        if (provider === 'gemini')     await testGeminiKey(key);
+        else if (provider === 'groq')  await testGroqKey(key);
+        else                           await testAssemblyAIKey(key);
         resultEl.textContent = '✅ Chave válida';
         resultEl.className = 'test-result success';
       } catch (err) {

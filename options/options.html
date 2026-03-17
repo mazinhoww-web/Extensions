@@ -81,6 +81,25 @@
       </p>
     </div>
 
+    <!-- AssemblyAI key -->
+    <div class="form-group" id="assemblyaiKeyGroup" style="margin-top:16px;padding-top:16px;border-top:1px solid var(--border);">
+      <label>
+        API Key do AssemblyAI
+        <span class="optional">(opcional — necessária para identificação de falantes no Modo Sala)</span>
+      </label>
+      <div class="input-row">
+        <input type="password" id="assemblyaiApiKey" placeholder="xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx">
+        <button class="eye-btn" data-target="assemblyaiApiKey">👁</button>
+        <button class="test-btn" data-provider="assemblyai">Testar</button>
+      </div>
+      <div class="test-result" id="testAssemblyaiResult"></div>
+      <p class="hint">
+        Crie uma conta gratuita em
+        <a href="https://www.assemblyai.com/" target="_blank">assemblyai.com</a>
+        e copie sua API key no painel. Necessária apenas para diarização de falantes em gravações com microfone.
+      </p>
+    </div>
+
   </div>
 
   <!-- ── Card: Language & Output ──────────────────────────────── -->

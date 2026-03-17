@@ -71,6 +71,49 @@ const messages = {
     lastMeeting: 'Última reunião:',
     noTitle: 'Sem título',
 
+    // AssemblyAI warning
+    noAssemblyAIKey: 'Chave AssemblyAI não configurada. A identificação de falantes por voz não estará disponível. Configure nas Opções para ativar.',
+
+    // Cancel recording modal
+    confirmCancelTitle: 'Cancelar gravação?',
+    confirmCancelMsg: 'Toda a transcrição desta reunião será perdida. Esta ação não pode ser desfeita.',
+    confirmCancelBack: 'Voltar',
+    confirmCancelYes: 'Sim, cancelar',
+
+    // Caption warning
+    noCaptionsWarning: 'Legendas não detectadas. Verifique se as legendas estão ativas na reunião (ativar "CC" ou "Legendas" na barra inferior).',
+
+    // Empty state
+    noMeetingDetected: 'Você não está em uma reunião. Abra o Google Meet ou Microsoft Teams para transcrever automaticamente. Ou use o Modo Sala para reuniões presenciais.',
+
+    // Friendly errors
+    errorInvalidApiKey: 'Chave de API inválida ou expirada. Atualize nas Configurações.',
+    errorQuotaExceeded: 'Limite de uso da API atingido. Aguarde alguns minutos ou configure uma chave alternativa.',
+    errorNetwork: 'Sem conexão com a internet. Verifique sua rede e tente novamente.',
+    errorNoApiKey: 'Nenhuma chave de API configurada. Acesse as Configurações para adicionar.',
+
+    // Onboarding (multilingual)
+    onboarding1Title: 'Bem-vindo ao MeetScribe!',
+    onboarding1Body: 'Transcreva reuniões e gere atas completas com IA — automaticamente. Vamos configurar tudo em menos de 2 minutos.',
+    onboarding2Title: 'Configure sua API key',
+    onboarding2Body: 'O MeetScribe usa Gemini ou Groq para gerar atas. Ambos são gratuitos. Clique em <strong>Configurações</strong> no rodapé para adicionar sua chave.',
+    onboarding3Title: 'Inicie uma reunião',
+    onboarding3Body: 'Entre no Google Meet ou Teams e o MeetScribe inicia automaticamente. Para reuniões presenciais, use a aba <strong>Modo Sala</strong>.',
+    onboarding4Title: 'Sua ata em segundos',
+    onboarding4Body: 'Ao encerrar, clique em <strong>Encerrar e Gerar Ata</strong>. A ata é gerada com resumo, decisões e próximos passos.',
+    onboarding5Title: 'Pronto!',
+    onboarding5Body: 'Você está pronto para usar o MeetScribe. Boa reunião!',
+    onboardingNext: 'Próximo →',
+    onboardingStart: 'Começar',
+    onboardingSkip: 'Pular',
+
+    // History export
+    exportAllMinutes: 'Exportar todas as atas',
+    showMore: 'Ver mais',
+
+    // Offline recorder banner
+    speechUnavailable: 'Transcrição ao vivo indisponível (sem conexão ou navegador incompatível). O áudio está sendo gravado e será transcrito por IA ao encerrar.',
+
     // Errors
     noApiKey: 'Nenhuma API key configurada. Acesse as opções da extensão para configurar.',
     noMinutesHistory: 'Esta reunião não tem ata gerada. A ata só está disponível para reuniões encerradas pelo MeetScribe.',
@@ -130,6 +173,41 @@ const messages = {
     lastMeeting: 'Last meeting:',
     noTitle: 'No title',
 
+    noAssemblyAIKey: 'AssemblyAI key not configured. Voice speaker identification will not be available. Configure it in Options to enable.',
+
+    confirmCancelTitle: 'Cancel recording?',
+    confirmCancelMsg: 'All transcription for this meeting will be lost. This action cannot be undone.',
+    confirmCancelBack: 'Go back',
+    confirmCancelYes: 'Yes, cancel',
+
+    noCaptionsWarning: 'Captions not detected. Make sure captions are enabled in the meeting (enable "CC" or "Captions" in the bottom bar).',
+
+    noMeetingDetected: "You are not in a meeting. Open Google Meet or Microsoft Teams to transcribe automatically. Or use Room Mode for in-person meetings.",
+
+    errorInvalidApiKey: 'Invalid or expired API key. Update it in Settings.',
+    errorQuotaExceeded: 'API usage limit reached. Wait a few minutes or configure an alternate key.',
+    errorNetwork: 'No internet connection. Check your network and try again.',
+    errorNoApiKey: 'No API key configured. Go to Settings to add one.',
+
+    onboarding1Title: 'Welcome to MeetScribe!',
+    onboarding1Body: 'Transcribe meetings and generate complete AI-powered minutes — automatically. Let\'s set everything up in under 2 minutes.',
+    onboarding2Title: 'Set up your API key',
+    onboarding2Body: 'MeetScribe uses Gemini or Groq to generate minutes. Both are free. Click <strong>Settings</strong> in the footer to add your key.',
+    onboarding3Title: 'Start a meeting',
+    onboarding3Body: 'Join Google Meet or Teams and MeetScribe starts automatically. For in-person meetings, use the <strong>Room Mode</strong> tab.',
+    onboarding4Title: 'Your minutes in seconds',
+    onboarding4Body: 'When done, click <strong>Stop & Generate Minutes</strong>. Minutes are generated with summary, decisions, and next steps.',
+    onboarding5Title: 'All set!',
+    onboarding5Body: 'You are ready to use MeetScribe. Have a great meeting!',
+    onboardingNext: 'Next →',
+    onboardingStart: 'Start',
+    onboardingSkip: 'Skip',
+
+    exportAllMinutes: 'Export all minutes',
+    showMore: 'Show more',
+
+    speechUnavailable: 'Live transcription unavailable (no connection or incompatible browser). Audio is being recorded and will be transcribed by AI when finished.',
+
     noApiKey: 'No API key configured. Open extension options to set it up.',
     noMinutesHistory: 'This meeting has no minutes generated. Minutes are only available for meetings ended through MeetScribe.',
   },
@@ -187,6 +265,41 @@ const messages = {
 
     lastMeeting: 'Última reunión:',
     noTitle: 'Sin título',
+
+    noAssemblyAIKey: 'Clave AssemblyAI no configurada. La identificación de hablantes por voz no estará disponible. Configúrala en Opciones para activarla.',
+
+    confirmCancelTitle: '¿Cancelar grabación?',
+    confirmCancelMsg: 'Toda la transcripción de esta reunión se perderá. Esta acción no se puede deshacer.',
+    confirmCancelBack: 'Volver',
+    confirmCancelYes: 'Sí, cancelar',
+
+    noCaptionsWarning: 'Subtítulos no detectados. Asegúrate de que los subtítulos estén activos en la reunión (activar "CC" o "Subtítulos" en la barra inferior).',
+
+    noMeetingDetected: 'No estás en una reunión. Abre Google Meet o Microsoft Teams para transcribir automáticamente. O usa el Modo Sala para reuniones presenciales.',
+
+    errorInvalidApiKey: 'Clave de API inválida o expirada. Actualízala en Configuración.',
+    errorQuotaExceeded: 'Límite de uso de la API alcanzado. Espera unos minutos o configura una clave alternativa.',
+    errorNetwork: 'Sin conexión a internet. Verifica tu red e inténtalo de nuevo.',
+    errorNoApiKey: 'Ninguna clave de API configurada. Ve a Configuración para añadir una.',
+
+    onboarding1Title: '¡Bienvenido a MeetScribe!',
+    onboarding1Body: 'Transcribe reuniones y genera actas completas con IA — automáticamente. Configuremos todo en menos de 2 minutos.',
+    onboarding2Title: 'Configura tu API key',
+    onboarding2Body: 'MeetScribe usa Gemini o Groq para generar actas. Ambos son gratuitos. Haz clic en <strong>Configuración</strong> en el pie de página para añadir tu clave.',
+    onboarding3Title: 'Inicia una reunión',
+    onboarding3Body: 'Entra en Google Meet o Teams y MeetScribe inicia automáticamente. Para reuniones presenciales, usa la pestaña <strong>Modo Sala</strong>.',
+    onboarding4Title: 'Tu acta en segundos',
+    onboarding4Body: 'Al terminar, haz clic en <strong>Finalizar y Generar Acta</strong>. El acta se genera con resumen, decisiones y próximos pasos.',
+    onboarding5Title: '¡Todo listo!',
+    onboarding5Body: '¡Estás listo para usar MeetScribe. ¡Buena reunión!',
+    onboardingNext: 'Siguiente →',
+    onboardingStart: 'Empezar',
+    onboardingSkip: 'Saltar',
+
+    exportAllMinutes: 'Exportar todas las actas',
+    showMore: 'Ver más',
+
+    speechUnavailable: 'Transcripción en vivo no disponible (sin conexión o navegador incompatible). El audio está siendo grabado y será transcrito por IA al finalizar.',
 
     noApiKey: 'Ninguna API key configurada. Abre las opciones de la extensión para configurarla.',
     noMinutesHistory: 'Esta reunión no tiene acta generada. Las actas solo están disponibles para reuniones finalizadas en MeetScribe.',

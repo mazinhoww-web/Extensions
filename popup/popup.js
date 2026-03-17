@@ -162,6 +162,13 @@ async function checkApiKey() {
   return !!hasKey;
 }
 
+async function warnIfNoAssemblyAI() {
+  const { assemblyaiApiKey } = await chrome.storage.sync.get('assemblyaiApiKey');
+  if (!assemblyaiApiKey) {
+    showError(t('noAssemblyAIKey'));
+  }
+}
+
 // ─── Start recording (platform mode) ─────────────────────────────────────────
 
 async function startPlatformRecording() {
@@ -203,6 +210,8 @@ async function startPlatformRecording() {
 // ─── Start recording (hybrid mode: platform captions + room mic) ──────────────
 
 async function startHybridRecording() {
+  // Warn (non-blocking) if AssemblyAI is not configured — diarization won't work
+  await warnIfNoAssemblyAI();
   try {
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
     if (!tab) return showError('Nenhuma aba ativa encontrada.');
@@ -241,6 +250,8 @@ async function startHybridRecording() {
 // ─── Start recording (offline mode — opens dedicated recorder page) ───────────
 
 async function startMicRecording() {
+  // Warn (non-blocking) if AssemblyAI is not configured — diarization won't work
+  await warnIfNoAssemblyAI();
   const title = document.getElementById('meetingTitleInput')?.value.trim() || '';
   const recorderBase = chrome.runtime.getURL('recorder/recorder.html');
   const recorderUrl  = title
