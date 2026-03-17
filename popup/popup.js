@@ -66,6 +66,23 @@ function friendlyError(err) {
   return msg;
 }
 
+// ─── Retry with exponential backoff ──────────────────────────────────────────
+// Retries on network/rate-limit errors; propagates immediately on auth errors.
+
+async function retryWithBackoff(fn, retries = 3, delayMs = 1000) {
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      return await fn();
+    } catch (err) {
+      const msg = err?.message || String(err);
+      const isAuthError = msg.includes('401') || msg.includes('403') ||
+        msg.includes('API_KEY_INVALID') || msg.includes('não configurada');
+      if (isAuthError || attempt === retries) throw err;
+      await new Promise((r) => setTimeout(r, delayMs * 2 ** attempt));
+    }
+  }
+}
+
 function showError(msg) {
   const el = document.getElementById('errorBanner');
   if (el) {
@@ -318,22 +335,27 @@ async function startMicRecording() {
   setButtonLoading('btnStartMic', 'Iniciando...');
   // Warn (non-blocking) if AssemblyAI is not configured — diarization won't work
   await warnIfNoAssemblyAI();
-  const title = document.getElementById('meetingTitleInput')?.value.trim() || '';
-  const recorderBase = chrome.runtime.getURL('recorder/recorder.html');
-  const recorderUrl  = title
-    ? `${recorderBase}?title=${encodeURIComponent(title)}`
-    : recorderBase;
+  try {
+    const title = document.getElementById('meetingTitleInput')?.value.trim() || '';
+    const recorderBase = chrome.runtime.getURL('recorder/recorder.html');
+    const recorderUrl  = title
+      ? `${recorderBase}?title=${encodeURIComponent(title)}`
+      : recorderBase;
 
-  // If recorder page already open, focus it instead of opening a new one
-  const existing = await chrome.tabs.query({ url: recorderBase });
-  if (existing.length > 0) {
-    await chrome.tabs.update(existing[0].id, { active: true });
-    await chrome.windows.update(existing[0].windowId, { focused: true });
-  } else {
-    await chrome.tabs.create({ url: recorderUrl });
+    // If recorder page already open, focus it instead of opening a new one
+    const existing = await chrome.tabs.query({ url: recorderBase });
+    if (existing.length > 0) {
+      await chrome.tabs.update(existing[0].id, { active: true });
+      await chrome.windows.update(existing[0].windowId, { focused: true });
+    } else {
+      await chrome.tabs.create({ url: recorderUrl });
+    }
+
+    window.close(); // Close popup only after tab is confirmed open
+  } catch (err) {
+    clearButtonLoading('btnStartMic');
+    showError(friendlyError(err));
   }
-
-  window.close(); // Close popup
 }
 
 // ─── Enter recording view ─────────────────────────────────────────────────────
@@ -399,7 +421,9 @@ async function stopAndGenerate() {
     if (audioChunks?.length > 0) {
       if (isSalaMode) {
         updateGeneratingStatus('Identificando falantes por voz...', 25);
-        assemblyTranscript = await transcribeWithAssemblyAI(audioChunks).catch((err) => {
+        assemblyTranscript = await retryWithBackoff(
+          () => transcribeWithAssemblyAI(audioChunks)
+        ).catch((err) => {
           console.warn('[MeetScribe] AssemblyAI falhou, usando transcrição local:', err.message);
           return null;
         });
@@ -407,7 +431,9 @@ async function stopAndGenerate() {
         const { geminiApiKey } = await chrome.storage.sync.get('geminiApiKey');
         if (geminiApiKey) {
           updateGeneratingStatus('Analisando áudio com IA...', 35);
-          geminiTranscript = await transcribeAudioWithGemini(geminiApiKey, audioChunks, allCaptions);
+          geminiTranscript = await retryWithBackoff(
+            () => transcribeAudioWithGemini(geminiApiKey, audioChunks, allCaptions)
+          );
         }
       }
     }
@@ -425,10 +451,8 @@ async function stopAndGenerate() {
     });
 
     updateGeneratingStatus('Gerando ata com IA...', 65);
-    minutesMarkdown = await generateMinutes(
-      meeting || storedMeeting,
-      normalizedTranscript,
-      updateGeneratingStatus
+    minutesMarkdown = await retryWithBackoff(
+      () => generateMinutes(meeting || storedMeeting, normalizedTranscript, updateGeneratingStatus)
     );
 
     updateGeneratingStatus('Salvando resultados...', 95);
@@ -467,7 +491,9 @@ async function generateFromEndedMeeting(endedMeeting) {
     if (audioChunks?.length > 0) {
       if (isSalaMode) {
         updateGeneratingStatus('Identificando falantes por voz...', 25);
-        assemblyTranscript = await transcribeWithAssemblyAI(audioChunks).catch((err) => {
+        assemblyTranscript = await retryWithBackoff(
+          () => transcribeWithAssemblyAI(audioChunks)
+        ).catch((err) => {
           console.warn('[MeetScribe] AssemblyAI falhou, usando transcrição local:', err.message);
           return null;
         });
@@ -475,7 +501,9 @@ async function generateFromEndedMeeting(endedMeeting) {
         const { geminiApiKey } = await chrome.storage.sync.get('geminiApiKey');
         if (geminiApiKey) {
           updateGeneratingStatus('Analisando áudio com IA...', 35);
-          geminiTranscript = await transcribeAudioWithGemini(geminiApiKey, audioChunks, allCaptions);
+          geminiTranscript = await retryWithBackoff(
+            () => transcribeAudioWithGemini(geminiApiKey, audioChunks, allCaptions)
+          );
         }
       }
     }
@@ -492,10 +520,8 @@ async function generateFromEndedMeeting(endedMeeting) {
     });
 
     updateGeneratingStatus('Gerando ata com IA...', 65);
-    minutesMarkdown = await generateMinutes(
-      endedMeeting,
-      normalizedTranscript,
-      updateGeneratingStatus
+    minutesMarkdown = await retryWithBackoff(
+      () => generateMinutes(endedMeeting, normalizedTranscript, updateGeneratingStatus)
     );
 
     updateGeneratingStatus('Salvando resultados...', 95);
