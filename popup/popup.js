@@ -632,6 +632,9 @@ chrome.runtime.onMessage.addListener((msg) => {
   if (msg.type === 'MEETING_ENDED' && currentView === 'recording') {
     stopAndGenerate();
   }
+  if (msg.type === 'CAPTION_WARNING') {
+    showError(t('noCaptionsWarning'));
+  }
 });
 
 // ─── Check for existing in-progress meeting ───────────────────────────────────

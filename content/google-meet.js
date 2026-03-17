@@ -295,6 +295,27 @@
     audioProcessor = null;
   }
 
+  // ─── No-caption warning after 30 seconds ────────────────────────────────────
+
+  let captionWarnTimeout = null;
+
+  function scheduleCaptionWarning() {
+    captionWarnTimeout = setTimeout(() => {
+      if (!isActive) return;
+      if (captionFirstSeen.size === 0) {
+        chrome.runtime.sendMessage({
+          type: 'CAPTION_WARNING',
+          message: 'noCaptionsDetected',
+        }).catch(() => {});
+      }
+    }, 30000);
+  }
+
+  function cancelCaptionWarning() {
+    clearTimeout(captionWarnTimeout);
+    captionWarnTimeout = null;
+  }
+
   // ─── Activate / Deactivate ──────────────────────────────────────────────────
 
   async function activate() {
@@ -310,6 +331,7 @@
     meetingStarted = true;
     startObserver();
     showOverlay();
+    scheduleCaptionWarning();
     await startAudioPipeline();
   }
 
@@ -317,6 +339,7 @@
     if (!isActive) return;
     isActive = false;
 
+    cancelCaptionWarning();
     stopObserver();
     stopAudioPipeline();
     removeOverlay();
