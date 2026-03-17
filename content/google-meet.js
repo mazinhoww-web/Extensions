@@ -263,11 +263,14 @@
 
       recorder.ondataavailable = async (e) => {
         if (e.data && e.data.size > 0) {
-          // Send blob to background for IndexedDB storage
+          // Blobs do not survive chrome.runtime.sendMessage JSON serialization,
+          // so we convert to Uint8Array before sending.
           const arrayBuffer = await e.data.arrayBuffer();
+          const uint8Array = new Uint8Array(arrayBuffer);
           chrome.runtime.sendMessage({
             type: 'AUDIO_CHUNK',
-            blob: e.data,
+            audioData: Array.from(uint8Array),
+            mimeType: e.data.type || 'audio/webm',
           }).catch(() => {});
         }
       };

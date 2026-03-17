@@ -253,9 +253,15 @@ async function startAudioPipeline() {
 
     mediaRecorder = new MediaRecorder(dest.stream, { mimeType, audioBitsPerSecond: 32000 });
 
-    mediaRecorder.ondataavailable = (e) => {
+    mediaRecorder.ondataavailable = async (e) => {
       if (e.data?.size > 0) {
-        chrome.runtime.sendMessage({ type: 'AUDIO_CHUNK', blob: e.data }).catch(() => {});
+        const arrayBuffer = await e.data.arrayBuffer();
+        const uint8Array = new Uint8Array(arrayBuffer);
+        chrome.runtime.sendMessage({
+          type: 'AUDIO_CHUNK',
+          audioData: Array.from(uint8Array),
+          mimeType: e.data.type || 'audio/webm',
+        }).catch(() => {});
       }
     };
 

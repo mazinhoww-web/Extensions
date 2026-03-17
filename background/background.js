@@ -171,8 +171,12 @@ async function handleMessage(msg, sender) {
 
     case 'AUDIO_CHUNK': {
       const meeting = await getCurrentMeeting();
-      if (meeting && msg.blob) {
-        await saveAudioChunk(meeting.id, msg.blob);
+      if (meeting && msg.audioData) {
+        // Reconstruct Blob from serialized Uint8Array (Blobs don't survive sendMessage JSON)
+        const blob = new Blob([new Uint8Array(msg.audioData)], {
+          type: msg.mimeType || 'audio/webm',
+        });
+        await saveAudioChunk(meeting.id, blob);
       }
       return { success: true };
     }
