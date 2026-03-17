@@ -61,13 +61,30 @@ export async function transcribeWithAssemblyAI(audioBlobs) {
       const audioDurationMs = (result.audio_duration || 0) * 1000;
       const baseTime = Date.now() - audioDurationMs;
 
-      return (result.utterances || []).map((u) => ({
+      const rawChunks = (result.utterances || []).map((u) => ({
         speaker: `Falante ${u.speaker}`,
         text: u.text,
         timestamp: baseTime + u.start,
+        durationMs: u.end - u.start,
         source: 'assembly-diarized',
         platform: 'mic',
       }));
+
+      // Post-processing: merge very short segments (<300ms) from the same speaker
+      // into the preceding segment. Prevents echo-induced fragmentation where a
+      // reverb tail is detected as a separate utterance by the same speaker.
+      const merged = [];
+      for (const chunk of rawChunks) {
+        const prev = merged[merged.length - 1];
+        if (prev && prev.speaker === chunk.speaker && chunk.durationMs < 300) {
+          prev.text = `${prev.text} ${chunk.text}`.trim();
+        } else {
+          merged.push({ ...chunk });
+        }
+      }
+
+      // Remove internal durationMs before returning (not part of public interface)
+      return merged.map(({ durationMs: _, ...rest }) => rest);
     }
 
     if (result.status === 'error') {

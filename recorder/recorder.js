@@ -28,6 +28,8 @@ const SPEAKER_GAP_MS = 2500;
 let mediaRecorder = null;
 let audioStream   = null;
 let audioCtx      = null;
+let audioAnalyser = null;
+let qualityAnimFrame = null;
 const AUDIO_CHUNK_MS = 30000;
 
 // ─── UI: State switching ──────────────────────────────────────────────────────
@@ -48,9 +50,13 @@ function setStatus(text, type = '') {
   badge.className = `status-badge${type ? ` ${type}` : ''}`;
 }
 
-function setGeneratingStatus(text) {
+function setGeneratingStatus(text, percent) {
   const el = document.getElementById('genStatus');
   if (el) el.textContent = text;
+  if (percent !== undefined) {
+    const fill = document.getElementById('progressFill');
+    if (fill) fill.style.width = `${Math.min(100, Math.max(0, percent))}%`;
+  }
 }
 
 function showError(msg) {
@@ -215,14 +221,31 @@ async function startAudioPipeline() {
     compressor.attack.value    = 0.003;
     compressor.release.value   = 0.25;
 
+    // Noise gate: suppress room echo/reverb tails below -55dB
+    const noiseGate = audioCtx.createDynamicsCompressor();
+    noiseGate.threshold.value = -55;
+    noiseGate.knee.value      = 0;
+    noiseGate.ratio.value     = 20;
+    noiseGate.attack.value    = 0.001;
+    noiseGate.release.value   = 0.1;
+
     const gain = audioCtx.createGain();
     gain.gain.value = 2.0;
+
+    // Analyser for real-time audio quality indicator
+    audioAnalyser = audioCtx.createAnalyser();
+    audioAnalyser.fftSize = 256;
 
     const dest = audioCtx.createMediaStreamDestination();
     source.connect(highpass);
     highpass.connect(compressor);
-    compressor.connect(gain);
+    compressor.connect(noiseGate);
+    noiseGate.connect(gain);
+    gain.connect(audioAnalyser);
     gain.connect(dest);
+
+    // Start RMS measurement loop (~10fps)
+    startQualityMeter();
 
     const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
       ? 'audio/webm;codecs=opus'
@@ -244,6 +267,7 @@ async function startAudioPipeline() {
 }
 
 async function stopAudioPipeline() {
+  stopQualityMeter();
   try {
     if (mediaRecorder && mediaRecorder.state !== 'inactive') mediaRecorder.stop();
     if (audioStream) audioStream.getTracks().forEach((t) => t.stop());
@@ -252,7 +276,76 @@ async function stopAudioPipeline() {
   mediaRecorder = null;
   audioStream   = null;
   audioCtx      = null;
+  audioAnalyser = null;
 }
+
+// ─── Audio Quality Meter ──────────────────────────────────────────────────────
+
+function startQualityMeter() {
+  if (!audioAnalyser) return;
+  const dataArray = new Uint8Array(audioAnalyser.frequencyBinCount);
+
+  function measure() {
+    if (!audioAnalyser) return;
+    audioAnalyser.getByteTimeDomainData(dataArray);
+    // Calculate RMS (0–1 range)
+    let sum = 0;
+    for (let i = 0; i < dataArray.length; i++) {
+      const v = (dataArray[i] - 128) / 128;
+      sum += v * v;
+    }
+    const rms = Math.sqrt(sum / dataArray.length);
+
+    const fill = document.getElementById('audioQualityFill');
+    const status = document.getElementById('audioQualityStatus');
+    if (fill && status) {
+      const pct = Math.min(100, Math.round(rms * 600)); // scale to 0-100
+      fill.style.width = `${pct}%`;
+      if (rms > 0.1) {
+        fill.style.background = '#43a047'; // green — good
+        status.textContent = 'Bom';
+      } else if (rms > 0.03) {
+        fill.style.background = '#f59e0b'; // yellow — medium
+        status.textContent = 'Médio';
+      } else {
+        fill.style.background = '#ef4444'; // red — weak
+        status.textContent = 'Fraco';
+      }
+    }
+    qualityAnimFrame = setTimeout(measure, 100); // ~10fps
+  }
+  measure();
+}
+
+function stopQualityMeter() {
+  if (qualityAnimFrame) {
+    clearTimeout(qualityAnimFrame);
+    qualityAnimFrame = null;
+  }
+  const fill = document.getElementById('audioQualityFill');
+  const status = document.getElementById('audioQualityStatus');
+  if (fill) fill.style.width = '0%';
+  if (status) status.textContent = '—';
+}
+
+// Tab visibility: pause/resume audio when switching tabs
+document.addEventListener('visibilitychange', () => {
+  if (!isRecording || !audioCtx) return;
+  if (document.hidden) {
+    if (mediaRecorder?.state === 'recording') {
+      try { mediaRecorder.requestData(); } catch (_) {}
+    }
+    if (audioCtx.state === 'running') audioCtx.suspend().catch(() => {});
+  } else {
+    if (audioCtx.state === 'suspended') {
+      audioCtx.resume().then(() => {
+        if (mediaRecorder?.state === 'inactive') {
+          try { mediaRecorder.start(AUDIO_CHUNK_MS); } catch (_) {}
+        }
+      }).catch(() => {});
+    }
+  }
+});
 
 // ─── Start Recording ──────────────────────────────────────────────────────────
 
@@ -334,7 +427,7 @@ async function generateAta() {
     const endResp = await chrome.runtime.sendMessage({ type: 'END_MEETING' });
     meeting = endResp?.meeting || meeting;
 
-    setGeneratingStatus('Normalizando transcrição...');
+    setGeneratingStatus('Normalizando transcrição...', 10);
 
     // Use stored caption chunks (background has the authoritative list)
     const { meeting: stored } = await chrome.runtime
@@ -349,14 +442,14 @@ async function generateAta() {
 
     let assemblyTranscript = null;
     if (audioChunks?.length > 0) {
-      setGeneratingStatus('Identificando falantes por voz...');
+      setGeneratingStatus('Identificando falantes por voz...', 25);
       assemblyTranscript = await transcribeWithAssemblyAI(audioChunks).catch((err) => {
         console.warn('[MeetScribe] AssemblyAI falhou, usando transcrição local:', err.message);
         return null;
       });
     }
 
-    setGeneratingStatus('Reconciliando texto...');
+    setGeneratingStatus('Reconciliando texto...', 50);
     const captionsForNormalize = assemblyTranscript || allCaptions;
     const normalized = normalizeTranscript(captionsForNormalize, null);
 
@@ -364,16 +457,18 @@ async function generateAta() {
       type: 'SAVE_FIELD', field: 'normalizedTranscript', value: normalized,
     }).catch(() => {});
 
-    setGeneratingStatus('Gerando ata com IA...');
+    setGeneratingStatus('Gerando ata com IA...', 65);
     minutesMarkdown = await generateMinutes(
       meeting || stored,
       normalized,
       setGeneratingStatus,
     );
 
+    setGeneratingStatus('Salvando resultados...', 95);
     await chrome.runtime.sendMessage({
       type: 'SAVE_FIELD', field: 'minutesMarkdown', value: minutesMarkdown,
     }).catch(() => {});
+    setGeneratingStatus('Concluído!', 100);
 
     showMinutes(minutesMarkdown);
 

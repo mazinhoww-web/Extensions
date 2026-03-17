@@ -55,6 +55,20 @@
   let audioProcessor = null;
   let processedEntries = new Set(); // deduplicate by text hash
 
+  // ─── Caption latency correction ──────────────────────────────────────────────
+  const captionFirstSeen = new Map();
+
+  function getOrRecordFirstSeen(speaker, text) {
+    const prefix = `${speaker}::${text.slice(0, 30)}`;
+    if (!captionFirstSeen.has(prefix)) {
+      captionFirstSeen.set(prefix, Date.now());
+      if (captionFirstSeen.size > 50) {
+        captionFirstSeen.delete(captionFirstSeen.keys().next().value);
+      }
+    }
+    return captionFirstSeen.get(prefix);
+  }
+
   // ─── Utilities ──────────────────────────────────────────────────────────────
 
   function findEl(selectors, root = document) {
@@ -155,7 +169,7 @@
     const chunk = {
       speaker,
       text,
-      timestamp: Date.now(),
+      timestamp: getOrRecordFirstSeen(speaker, text),
       platform: 'teams',
     };
 
@@ -377,6 +391,42 @@
     }, 2000);
     setTimeout(() => clearInterval(poll), 3 * 60 * 60 * 1000); // expire after 3h
   })();
+
+  // Tab visibility: pause/resume audio pipeline to avoid data loss from Chrome throttling
+  document.addEventListener('visibilitychange', () => {
+    if (!audioProcessor) return;
+    if (document.hidden) {
+      if (audioProcessor.recorder?.state === 'recording') {
+        try { audioProcessor.recorder.requestData(); } catch (_) {}
+      }
+      if (audioProcessor.ctx?.state === 'running') {
+        audioProcessor.ctx.suspend().catch(() => {});
+      }
+    } else {
+      if (audioProcessor.ctx?.state === 'suspended') {
+        audioProcessor.ctx.resume().then(() => {
+          if (audioProcessor.recorder?.state === 'inactive') {
+            try { audioProcessor.recorder.start(30000); } catch (_) {}
+          }
+        }).catch(() => {});
+      }
+    }
+  });
+
+  // Network status: update overlay and resume AudioContext on reconnect
+  window.addEventListener('offline', () => {
+    if (overlayEl) overlayEl.innerHTML =
+      `<span style="width:8px;height:8px;border-radius:50%;background:#f59e0b;display:inline-block;"></span>
+       MeetScribe — sem conexão (gravando local)`;
+  });
+  window.addEventListener('online', () => {
+    if (overlayEl) overlayEl.innerHTML =
+      `<span style="width:8px;height:8px;border-radius:50%;background:#ff4444;display:inline-block;animation:ms-pulse 1.5s infinite;"></span>
+       MeetScribe ativo — gravando transcrição`;
+    if (audioProcessor?.ctx?.state === 'suspended') {
+      audioProcessor.ctx.resume().catch(() => {});
+    }
+  });
 
   window.addEventListener('beforeunload', () => {
     if (isActive) deactivate();

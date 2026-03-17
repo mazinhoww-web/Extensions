@@ -188,7 +188,7 @@ async function callGemini(apiKey, prompt, model = 'gemini-2.5-flash', onProgress
 
     if (res.status === 429 && attempt < retryDelays.length) {
       const waitSec = retryDelays[attempt] / 1000;
-      onProgress?.(`Aguardando quota Gemini (${waitSec}s)...`);
+      onProgress?.(`Aguardando quota Gemini (${waitSec}s)...`, 70);
       await new Promise(r => setTimeout(r, retryDelays[attempt]));
       continue;
     }
@@ -302,11 +302,13 @@ Seja preciso e mantenha todas as informações ditas.`;
 // ─── Main entry point ─────────────────────────────────────────────────────────
 
 export async function generateMinutes(meeting, normalizedTranscript, onProgress) {
-  const { aiProvider = 'groq', geminiApiKey, groqApiKey } = await chrome.storage.sync.get([
-    'aiProvider',
-    'geminiApiKey',
-    'groqApiKey',
-  ]);
+  const { aiProvider = 'groq', geminiApiKey, groqApiKey, includeFullTranscript } =
+    await chrome.storage.sync.get([
+      'aiProvider',
+      'geminiApiKey',
+      'groqApiKey',
+      'includeFullTranscript',
+    ]);
 
   if (!geminiApiKey && !groqApiKey) {
     throw new Error('Nenhuma API key configurada. Acesse as opções da extensão para configurar.');
@@ -326,7 +328,8 @@ export async function generateMinutes(meeting, normalizedTranscript, onProgress)
   if (!fitsGroq && geminiApiKey) {
     effectiveProvider = 'gemini';
     onProgress?.(
-      `Reunião longa (~${approxTokens} tokens) — usando Gemini automaticamente para melhor qualidade`
+      `Reunião longa (~${approxTokens} tokens) — usando Gemini automaticamente para melhor qualidade`,
+      68
     );
   } else if (geminiApiKey && !groqApiKey) {
     effectiveProvider = 'gemini';
@@ -341,18 +344,19 @@ export async function generateMinutes(meeting, normalizedTranscript, onProgress)
   const buildGroqPrompt = () => {
     const { chunks, truncated } = truncateTranscriptForGroq(normalizedTranscript);
     if (truncated) {
-      onProgress?.('Transcrição muito longa para o Groq — resumindo trechos intermediários...');
+      onProgress?.('Transcrição muito longa para o Groq — resumindo trechos intermediários...', 67);
     }
     return buildPrompt(meeting, chunks);
   };
 
   onProgress?.('Gerando ata com IA...');
 
+  let minutesText;
   try {
     if (effectiveProvider === 'gemini') {
-      return await callGemini(geminiApiKey, geminiPrompt, 'gemini-2.5-flash', onProgress);
+      minutesText = await callGemini(geminiApiKey, geminiPrompt, 'gemini-2.5-flash', onProgress);
     } else {
-      return await callGroq(groqApiKey, buildGroqPrompt());
+      minutesText = await callGroq(groqApiKey, buildGroqPrompt());
     }
   } catch (err) {
     const is429 = err.message.includes('Limite da API Gemini') || err.message.includes('429');
@@ -360,19 +364,29 @@ export async function generateMinutes(meeting, normalizedTranscript, onProgress)
     // Fallback 1: tentar modelos alternativos Gemini (cotas/projetos independentes)
     if (is429 && geminiApiKey) {
       for (const fallbackModel of ['gemini-2.0-flash', 'gemini-1.5-flash']) {
-        onProgress?.(`Tentando ${fallbackModel}...`);
+        onProgress?.(`Tentando ${fallbackModel}...`, 72);
         try {
-          return await callGemini(geminiApiKey, geminiPrompt, fallbackModel, onProgress);
+          minutesText = await callGemini(geminiApiKey, geminiPrompt, fallbackModel, onProgress);
+          break;
         } catch (_) { /* continua */ }
       }
     }
 
     // Fallback 2: Groq (com transcript truncado se necessário)
-    if (groqApiKey && effectiveProvider !== 'groq') {
-      onProgress?.('Gemini indisponível, usando Groq...');
-      return await callGroq(groqApiKey, buildGroqPrompt());
+    if (!minutesText && groqApiKey && effectiveProvider !== 'groq') {
+      onProgress?.('Gemini indisponível, usando Groq...', 75);
+      minutesText = await callGroq(groqApiKey, buildGroqPrompt());
     }
 
-    throw err;
+    if (!minutesText) throw err;
   }
+
+  // Append full transcript if setting is enabled
+  if (includeFullTranscript && normalizedTranscript?.length > 0) {
+    minutesText +=
+      '\n\n---\n\n## Transcrição Completa\n\n' +
+      formatTranscriptForPrompt(normalizedTranscript);
+  }
+
+  return minutesText;
 }

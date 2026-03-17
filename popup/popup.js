@@ -4,6 +4,8 @@ import { generateMinutes, transcribeAudioWithGemini } from '../utils/minutes-gen
 import { normalizeTranscript, formatTranscriptForDisplay } from '../utils/text-normalizer.js';
 import { exportTXT, exportPDF, copyToClipboard } from '../utils/exporter.js';
 import { transcribeWithAssemblyAI } from '../utils/assemblyai-transcriber.js';
+import { loadShortcuts, eventToShortcut } from '../utils/hotkeys.js';
+import { initI18n, t } from '../utils/i18n.js';
 
 // ─── State ────────────────────────────────────────────────────────────────────
 
@@ -302,7 +304,7 @@ async function stopAndGenerate() {
       }
     } catch (_) {}
 
-    updateGeneratingStatus('Normalizando transcrição...');
+    updateGeneratingStatus('Normalizando transcrição...', 10);
 
     // Get audio chunks for Gemini re-analysis
     const { chunks: audioChunks } = await chrome.runtime.sendMessage({ type: 'GET_AUDIO_CHUNKS' });
@@ -318,7 +320,7 @@ async function stopAndGenerate() {
 
     if (audioChunks?.length > 0) {
       if (isSalaMode) {
-        updateGeneratingStatus('Identificando falantes por voz...');
+        updateGeneratingStatus('Identificando falantes por voz...', 25);
         assemblyTranscript = await transcribeWithAssemblyAI(audioChunks).catch((err) => {
           console.warn('[MeetScribe] AssemblyAI falhou, usando transcrição local:', err.message);
           return null;
@@ -326,13 +328,13 @@ async function stopAndGenerate() {
       } else {
         const { geminiApiKey } = await chrome.storage.sync.get('geminiApiKey');
         if (geminiApiKey) {
-          updateGeneratingStatus('Analisando áudio com IA...');
+          updateGeneratingStatus('Analisando áudio com IA...', 35);
           geminiTranscript = await transcribeAudioWithGemini(geminiApiKey, audioChunks, allCaptions);
         }
       }
     }
 
-    updateGeneratingStatus('Normalizando e reconciliando texto...');
+    updateGeneratingStatus('Normalizando e reconciliando texto...', 50);
     const captionsForNormalize = (isSalaMode && assemblyTranscript) ? assemblyTranscript : allCaptions;
     const geminiForNormalize   = (isSalaMode && assemblyTranscript) ? null : geminiTranscript;
     const normalizedTranscript = normalizeTranscript(captionsForNormalize, geminiForNormalize);
@@ -344,19 +346,21 @@ async function stopAndGenerate() {
       value: normalizedTranscript,
     });
 
-    updateGeneratingStatus('Gerando ata com IA...');
+    updateGeneratingStatus('Gerando ata com IA...', 65);
     minutesMarkdown = await generateMinutes(
       meeting || storedMeeting,
       normalizedTranscript,
       updateGeneratingStatus
     );
 
+    updateGeneratingStatus('Salvando resultados...', 95);
     // Save minutes
     await chrome.runtime.sendMessage({
       type: 'SAVE_FIELD',
       field: 'minutesMarkdown',
       value: minutesMarkdown,
     });
+    updateGeneratingStatus('Concluído!', 100);
 
     showMinutes(minutesMarkdown);
   } catch (err) {
@@ -366,9 +370,13 @@ async function stopAndGenerate() {
   }
 }
 
-function updateGeneratingStatus(text) {
+function updateGeneratingStatus(text, percent) {
   const el = document.getElementById('generatingStatus');
   if (el) el.textContent = text;
+  if (percent !== undefined) {
+    const fill = document.getElementById('progressFill');
+    if (fill) fill.style.width = `${Math.min(100, Math.max(0, percent))}%`;
+  }
 }
 
 // ─── Show minutes ─────────────────────────────────────────────────────────────
@@ -392,34 +400,64 @@ async function loadHistory() {
     return;
   }
 
-  list.innerHTML = meetings
-    .map((m) => {
-      const date = new Date(m.startTime).toLocaleDateString('pt-BR');
-      const dur = m.endTime
-        ? `${Math.round((m.endTime - m.startTime) / 60000)} min`
-        : '—';
-      const platform = { 'google-meet': 'Meet', teams: 'Teams', mic: 'Offline', hybrid: 'Híbrido' }[m.platform] || m.platform;
-      return `<div class="history-item" data-id="${m.id}">
-        <div>
-          <div class="h-title">${escapeHtml(m.title || 'Reunião sem título')}</div>
-          <div class="h-meta">${date} · ${dur} · ${platform}</div>
-        </div>
-        <span style="font-size:18px;">›</span>
-      </div>`;
-    })
-    .join('');
+  const PLATFORM = { 'google-meet': '🎥 Meet', teams: '💼 Teams', mic: '🎤 Offline', hybrid: '🔀 Híbrido' };
 
-  list.querySelectorAll('.history-item').forEach((item) => {
-    item.addEventListener('click', () => {
-      const m = meetings.find((x) => String(x.id) === String(item.dataset.id));
-      if (!m) return;
-      if (m.minutesMarkdown) {
-        minutesMarkdown = m.minutesMarkdown;
-        meeting = m;
-        showMinutes(m.minutesMarkdown);
-      } else {
-        showError('Esta reunião não tem ata gerada. A ata só está disponível para reuniões encerradas pelo MeetScribe.');
-      }
+  list.innerHTML = meetings.map((m) => {
+    const date = new Date(m.startTime).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit' });
+    const dur  = m.endTime ? `${Math.round((m.endTime - m.startTime) / 60000)} min` : '—';
+    const plat = PLATFORM[m.platform] || m.platform;
+    const preview = m.minutesMarkdown
+      ? escapeHtml(m.minutesMarkdown.replace(/[#*`>]/g, '').slice(0, 160).trim())
+      : '<em style="color:var(--text-muted)">Sem ata gerada</em>';
+    const hasAta = !!m.minutesMarkdown;
+    return `
+      <div class="history-item" data-id="${m.id}">
+        <div class="history-card-header">
+          <div>
+            <div class="h-title">${escapeHtml(m.title || 'Reunião sem título')}</div>
+            <div class="h-meta">${date} · ${dur} · ${plat}</div>
+          </div>
+        </div>
+        ${hasAta ? `<div class="h-preview">${preview}</div>` : ''}
+        <div class="history-actions">
+          ${hasAta ? `<button class="h-action-btn h-view" data-id="${m.id}">👁 Ver ata</button>` : ''}
+          ${hasAta ? `<button class="h-action-btn h-copy" data-id="${m.id}">📋 Copiar</button>` : ''}
+          ${hasAta ? `<button class="h-action-btn h-txt" data-id="${m.id}">⬇ TXT</button>` : ''}
+          <button class="h-action-btn danger h-delete" data-id="${m.id}">🗑</button>
+        </div>
+      </div>`;
+  }).join('');
+
+  // Wire up action buttons
+  list.querySelectorAll('.h-view').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const m = meetings.find((x) => String(x.id) === String(btn.dataset.id));
+      if (m?.minutesMarkdown) { minutesMarkdown = m.minutesMarkdown; meeting = m; showMinutes(m.minutesMarkdown); }
+    });
+  });
+
+  list.querySelectorAll('.h-copy').forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      const m = meetings.find((x) => String(x.id) === String(btn.dataset.id));
+      if (!m?.minutesMarkdown) return;
+      const ok = await copyToClipboard(m.minutesMarkdown);
+      btn.textContent = ok ? '✅' : '❌';
+      setTimeout(() => { btn.textContent = '📋 Copiar'; }, 1500);
+    });
+  });
+
+  list.querySelectorAll('.h-txt').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const m = meetings.find((x) => String(x.id) === String(btn.dataset.id));
+      if (m?.minutesMarkdown) exportTXT(m.minutesMarkdown, `ata-${m.id}.txt`);
+    });
+  });
+
+  list.querySelectorAll('.h-delete').forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      btn.textContent = '⏳';
+      await chrome.runtime.sendMessage({ type: 'DELETE_MEETING', id: btn.dataset.id });
+      await loadHistory(); // re-render
     });
   });
 }
@@ -569,8 +607,222 @@ document.addEventListener('DOMContentLoaded', async () => {
     versionEl.textContent = `MeetScribe v${version}`;
   }
 
+  // i18n: load language and apply to static UI elements
+  await initI18n();
+  applyI18n();
+
+  // Network status: show offline banner and re-sync on reconnect
+  function updateOfflineBanner() {
+    const banner = document.getElementById('offlineBanner');
+    if (banner) banner.style.display = navigator.onLine ? 'none' : 'block';
+  }
+  updateOfflineBanner();
+  window.addEventListener('offline', updateOfflineBanner);
+  window.addEventListener('online', async () => {
+    updateOfflineBanner();
+    // Re-sync popup state in case something changed while offline
+    await checkExistingMeeting();
+  });
+
+  // Keyboard shortcuts
+  const shortcuts = await loadShortcuts();
+  document.addEventListener('keydown', async (e) => {
+    const combo = eventToShortcut(e);
+    if (combo === shortcuts.startStop) {
+      e.preventDefault();
+      if (currentView === 'idle') {
+        document.getElementById('btnStartPlatform')?.click();
+      } else if (currentView === 'recording') {
+        document.getElementById('btnStop')?.click();
+      }
+    } else if (combo === shortcuts.copyTranscript) {
+      e.preventDefault();
+      if (minutesMarkdown) {
+        await copyToClipboard(minutesMarkdown);
+      } else if (captionChunks.length > 0) {
+        const text = captionChunks.map((c) => `${c.speaker}: ${c.text}`).join('\n');
+        await copyToClipboard(text);
+      }
+    }
+  });
+
+  // Dark mode: load preference and wire toggle
+  const { darkMode } = await chrome.storage.sync.get('darkMode');
+  if (darkMode) {
+    document.body.classList.add('dark-mode');
+    const btn = document.getElementById('darkModeToggle');
+    if (btn) btn.textContent = '🌙';
+  }
+  document.getElementById('darkModeToggle')?.addEventListener('click', async () => {
+    const isDark = document.body.classList.toggle('dark-mode');
+    const btn = document.getElementById('darkModeToggle');
+    if (btn) btn.textContent = isDark ? '🌙' : '☀️';
+    await chrome.storage.sync.set({ darkMode: isDark });
+  });
+
   // Initial setup
   await detectPlatforms();
   await checkApiKey();
   await checkExistingMeeting();
+  await loadLastMeetingSummary();
+  await maybeShowOnboarding();
 });
+
+async function loadLastMeetingSummary() {
+  const { meetings = [] } = await chrome.runtime.sendMessage({ type: 'GET_MEETINGS_HISTORY' }).catch(() => ({ meetings: [] }));
+  const last = meetings[0];
+  const el = document.getElementById('lastMeetingSummary');
+  if (!el || !last) return;
+  const dur = last.endTime ? `${Math.round((last.endTime - last.startTime) / 60000)} min` : null;
+  const when = formatRelativeTime(last.startTime);
+  const plat = { 'google-meet': 'Meet', teams: 'Teams', mic: 'Offline', hybrid: 'Híbrido' }[last.platform] || last.platform;
+  el.style.display = 'block';
+  el.innerHTML = `<strong>Última reunião:</strong> ${escapeHtml(last.title || 'Sem título')}${dur ? ` · ${dur}` : ''} em ${plat} · ${when}`;
+  if (last.minutesMarkdown) {
+    el.title = 'Clique para ver a ata';
+    el.addEventListener('click', () => {
+      minutesMarkdown = last.minutesMarkdown;
+      meeting = last;
+      showMinutes(last.minutesMarkdown);
+    });
+  }
+}
+
+// ─── i18n application ─────────────────────────────────────────────────────────
+
+function applyI18n() {
+  // Tabs
+  const tabTexts = { tabPlatform: 'tabPlatform', tabMic: 'tabMic', tabHistory: 'tabHistory' };
+  const tabEl = { tabPlatform: '#tabPlatform', tabMic: '#tabMic', tabHistory: '#tabHistory' };
+  Object.entries(tabEl).forEach(([key, sel]) => {
+    const el = document.querySelector(sel);
+    if (el) el.textContent = t(key);
+  });
+
+  // Buttons
+  const btnMap = {
+    btnStartPlatform: 'startTranscription',
+    btnStartMic: 'startOfflineRecording',
+    btnStop: 'stopAndGenerate',
+    btnCancelRecording: 'cancelWithoutSaving',
+    btnNewMeeting: 'newMeeting',
+    btnCopyMinutes: 'copyBtn',
+    btnDownloadTXT: 'txtBtn',
+    btnDownloadPDF: 'pdfBtn',
+    footerOptions: 'settings',
+  };
+  Object.entries(btnMap).forEach(([id, key]) => {
+    const el = document.getElementById(id);
+    if (el) el.textContent = t(key);
+  });
+
+  // API warning
+  const apiWarn = document.querySelector('#apiWarning');
+  if (apiWarn) {
+    const link = apiWarn.querySelector('a');
+    const linkText = link ? link.outerHTML.replace(link.textContent, t('configureNow')) : '';
+    apiWarn.innerHTML = `${t('noApiWarning')} ${linkText}`;
+  }
+
+  // Offline banner
+  const offlineBanner = document.getElementById('offlineBanner');
+  if (offlineBanner) offlineBanner.textContent = t('offlineMsg');
+
+  // Generating view
+  const genLabel = document.querySelector('#viewGenerating strong');
+  if (genLabel) genLabel.textContent = t('generatingMinutes');
+  const genStatus = document.getElementById('generatingStatus');
+  if (genStatus && genStatus.textContent === 'Processando transcrição...') {
+    genStatus.textContent = t('processingTranscription');
+  }
+
+  // Minutes view header
+  const minutesHeader = document.querySelector('#viewMinutes strong');
+  if (minutesHeader) minutesHeader.textContent = t('minutesGenerated');
+}
+
+// ─── Onboarding ───────────────────────────────────────────────────────────────
+
+const ONBOARDING_STEPS = [
+  {
+    title: '👋 Bem-vindo ao MeetScribe!',
+    body: 'Transcreva reuniões e gere atas completas com IA — automaticamente. Vamos configurar tudo em menos de 2 minutos.',
+  },
+  {
+    title: '🔑 Configure sua API key',
+    body: 'O MeetScribe usa Gemini ou Groq para gerar atas. Ambos são gratuitos. Clique em <strong>Configurações</strong> no rodapé para adicionar sua chave.',
+  },
+  {
+    title: '🎙️ Inicie uma reunião',
+    body: 'Entre no Google Meet ou Teams e o MeetScribe inicia automaticamente. Para reuniões presenciais, use a aba <strong>Modo Sala</strong>.',
+  },
+  {
+    title: '📝 Sua ata em segundos',
+    body: 'Ao encerrar, clique em <strong>Encerrar e Gerar Ata</strong>. A ata é gerada com resumo, decisões e próximos passos.',
+  },
+  {
+    title: '✅ Pronto!',
+    body: 'Você está pronto para usar o MeetScribe. Boa reunião!',
+    isLast: true,
+  },
+];
+
+async function maybeShowOnboarding() {
+  const { geminiApiKey, groqApiKey, onboardingComplete } = await chrome.storage.sync.get([
+    'geminiApiKey', 'groqApiKey', 'onboardingComplete',
+  ]);
+  // Skip if already completed or if user has API keys (returning user)
+  if (onboardingComplete || geminiApiKey || groqApiKey) return;
+
+  let currentStep = 0;
+  const overlay = document.getElementById('onboardingOverlay');
+  const stepEl   = document.getElementById('onboardingStep');
+  const dotsEl   = document.getElementById('onboardingDots');
+  const nextBtn  = document.getElementById('onboardingNext');
+  const skipBtn  = document.getElementById('onboardingSkip');
+  if (!overlay || !stepEl) return;
+
+  function renderStep(idx) {
+    const step = ONBOARDING_STEPS[idx];
+    stepEl.innerHTML = `
+      <h3 style="font-size:15px;margin-bottom:8px;">${step.title}</h3>
+      <p style="font-size:13px;color:var(--text-muted);line-height:1.5;">${step.body}</p>
+    `;
+    // Update dots
+    dotsEl.innerHTML = ONBOARDING_STEPS.map((_, i) =>
+      `<span style="width:7px;height:7px;border-radius:50%;background:${i === idx ? 'var(--primary)' : 'var(--border)'};display:inline-block;"></span>`
+    ).join('');
+    // Update button
+    nextBtn.textContent = step.isLast ? '✅ Começar' : 'Próximo →';
+  }
+
+  function close() {
+    overlay.style.display = 'none';
+    chrome.storage.sync.set({ onboardingComplete: true });
+  }
+
+  nextBtn.addEventListener('click', () => {
+    if (currentStep < ONBOARDING_STEPS.length - 1) {
+      currentStep++;
+      renderStep(currentStep);
+    } else {
+      close();
+    }
+  });
+
+  skipBtn.addEventListener('click', close);
+
+  renderStep(0);
+  overlay.style.display = 'flex';
+}
+
+function formatRelativeTime(ts) {
+  const diff = Date.now() - ts;
+  const min  = Math.floor(diff / 60000);
+  const h    = Math.floor(diff / 3600000);
+  const d    = Math.floor(diff / 86400000);
+  if (min < 1) return 'agora há pouco';
+  if (min < 60) return `há ${min} min`;
+  if (h < 24) return `há ${h}h`;
+  return `há ${d} dia${d > 1 ? 's' : ''}`;
+}

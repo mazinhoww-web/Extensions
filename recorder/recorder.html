@@ -71,6 +71,15 @@
 
       <div id="captionCount" class="caption-count">0 trechos capturados</div>
 
+      <!-- Audio quality indicator -->
+      <div class="audio-quality-row">
+        <span class="audio-quality-label">Qualidade do microfone:</span>
+        <div class="audio-quality-bar">
+          <div class="audio-quality-fill" id="audioQualityFill"></div>
+        </div>
+        <span class="audio-quality-status" id="audioQualityStatus">—</span>
+      </div>
+
       <div id="currentSpeaker" class="current-speaker" style="display:none;"></div>
 
       <div id="transcript" class="transcript">
@@ -98,6 +107,9 @@
         <div class="spinner"></div>
         <h2>Gerando Ata com IA</h2>
         <p id="genStatus">Processando transcrição...</p>
+        <div class="progress-bar">
+          <div class="progress-fill" id="progressFill"></div>
+        </div>
       </div>
     </div>
 

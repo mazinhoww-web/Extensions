@@ -51,6 +51,24 @@
   let audioProcessor = null;
   let meetingStarted = false;
 
+  // ─── Caption latency correction ──────────────────────────────────────────────
+  // Tracks when each caption text prefix first appeared in the DOM.
+  // Using firstSeen instead of Date.now()-at-finalization gives a timestamp
+  // much closer to when the speech actually occurred, correcting high-latency drift.
+  const captionFirstSeen = new Map(); // `${speaker}::${prefix}` → timestamp
+
+  function getOrRecordFirstSeen(speaker, text) {
+    const prefix = `${speaker}::${text.slice(0, 30)}`;
+    if (!captionFirstSeen.has(prefix)) {
+      captionFirstSeen.set(prefix, Date.now());
+      // Evict oldest entries to avoid unbounded growth
+      if (captionFirstSeen.size > 50) {
+        captionFirstSeen.delete(captionFirstSeen.keys().next().value);
+      }
+    }
+    return captionFirstSeen.get(prefix);
+  }
+
   // ─── Utilities ──────────────────────────────────────────────────────────────
 
   function findElement(selectors, root = document) {
@@ -119,7 +137,7 @@
     const chunk = {
       speaker,
       text,
-      timestamp: Date.now(),
+      timestamp: getOrRecordFirstSeen(speaker, text),
       platform: 'google-meet',
     };
 
@@ -358,6 +376,46 @@
     }, 2000);
     setTimeout(() => clearInterval(poll), 3 * 60 * 60 * 1000); // expire after 3h
   })();
+
+  // Tab visibility: pause/resume audio pipeline to avoid data loss from Chrome throttling
+  document.addEventListener('visibilitychange', () => {
+    if (!audioProcessor) return;
+    if (document.hidden) {
+      // Pause MediaRecorder when tab goes background to avoid empty/corrupt chunks
+      if (audioProcessor.recorder?.state === 'recording') {
+        try { audioProcessor.recorder.requestData(); } catch (_) {} // flush current chunk
+      }
+      if (audioProcessor.ctx?.state === 'running') {
+        audioProcessor.ctx.suspend().catch(() => {});
+      }
+    } else {
+      // Resume when tab comes back to foreground
+      if (audioProcessor.ctx?.state === 'suspended') {
+        audioProcessor.ctx.resume().then(() => {
+          // Restart recorder if it stopped while suspended
+          if (audioProcessor.recorder?.state === 'inactive') {
+            try { audioProcessor.recorder.start(30000); } catch (_) {}
+          }
+        }).catch(() => {});
+      }
+    }
+  });
+
+  // Network status: update overlay and resume AudioContext on reconnect
+  window.addEventListener('offline', () => {
+    if (overlayEl) overlayEl.innerHTML =
+      `<span style="width:8px;height:8px;border-radius:50%;background:#f59e0b;display:inline-block;"></span>
+       MeetScribe — sem conexão (gravando local)`;
+  });
+  window.addEventListener('online', () => {
+    if (overlayEl) overlayEl.innerHTML =
+      `<span style="width:8px;height:8px;border-radius:50%;background:#ff4444;display:inline-block;animation:meetscribe-pulse 1.5s infinite;"></span>
+       MeetScribe ativo — gravando transcrição`;
+    // Resume AudioContext if it was suspended
+    if (audioProcessor?.ctx?.state === 'suspended') {
+      audioProcessor.ctx.resume().catch(() => {});
+    }
+  });
 
   // Clean up when page unloads
   window.addEventListener('beforeunload', () => {

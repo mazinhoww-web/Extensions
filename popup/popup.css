@@ -16,6 +16,15 @@
   --shadow: 0 2px 12px rgba(63,81,181,0.10);
 }
 
+body.dark-mode {
+  --bg: #1a1a2e;
+  --surface: #16213e;
+  --text: #e8e8f0;
+  --text-muted: #9090b0;
+  --border: #2e2e50;
+  --shadow: 0 2px 12px rgba(0,0,0,0.4);
+}
+
 body {
   width: 380px;
   min-height: 200px;
@@ -283,6 +292,23 @@ body {
   margin-top: 6px;
 }
 
+.progress-bar {
+  width: 100%;
+  height: 6px;
+  background: var(--border);
+  border-radius: 3px;
+  margin-top: 14px;
+  overflow: hidden;
+}
+
+.progress-fill {
+  height: 100%;
+  background: var(--primary);
+  border-radius: 3px;
+  width: 0%;
+  transition: width 0.4s ease;
+}
+
 /* ─── Minutes view ───────────────────────────────────────────────────────── */
 
 .minutes-preview {
@@ -302,21 +328,58 @@ body {
 /* ─── History ────────────────────────────────────────────────────────────── */
 
 .history-item {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  margin-bottom: 8px;
+  background: var(--surface);
+  overflow: hidden;
+}
+
+.history-card-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
   padding: 8px 10px;
+  gap: 6px;
+}
+
+.history-card-header:hover { background: rgba(63,81,181,0.04); }
+
+.history-item .h-title { font-weight: 600; font-size: 12px; }
+.history-item .h-meta { font-size: 11px; color: var(--text-muted); }
+
+.history-item .h-preview {
+  font-size: 11px;
+  color: var(--text-muted);
+  padding: 0 10px 8px;
+  line-height: 1.4;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.history-actions {
+  display: flex;
+  gap: 4px;
+  padding: 0 10px 8px;
+  flex-wrap: wrap;
+}
+
+.h-action-btn {
+  font-size: 10px;
+  padding: 3px 7px;
+  border-radius: 5px;
   border: 1px solid var(--border);
-  border-radius: 8px;
-  margin-bottom: 6px;
   background: var(--surface);
   cursor: pointer;
+  color: var(--text);
   transition: background 0.1s;
 }
 
-.history-item:hover { background: #f0f2ff; }
-.history-item .h-title { font-weight: 600; font-size: 12px; }
-.history-item .h-meta { font-size: 11px; color: var(--text-muted); }
+.h-action-btn:hover { background: var(--bg); }
+.h-action-btn.danger { border-color: #fca5a5; color: #dc2626; }
+.h-action-btn.danger:hover { background: #fee2e2; }
 
 /* ─── Mode selector ──────────────────────────────────────────────────────── */
 

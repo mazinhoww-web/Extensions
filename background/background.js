@@ -210,6 +210,14 @@ async function handleMessage(msg, sender) {
       return { meetings };
     }
 
+    case 'DELETE_MEETING': {
+      const { meetings = [] } = await chrome.storage.local.get('meetings');
+      const filtered = meetings.filter((m) => String(m.id) !== String(msg.id));
+      await chrome.storage.local.set({ meetings: filtered });
+      await deleteAudioChunks(msg.id).catch(() => {});
+      return { success: true };
+    }
+
     default:
       return { error: `Unknown message type: ${msg.type}` };
   }

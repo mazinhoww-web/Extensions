@@ -1,4 +1,5 @@
 // MeetScribe — Options Page Script
+import { DEFAULT_SHORTCUTS, eventToShortcut, loadShortcuts, saveShortcuts } from '../utils/hotkeys.js';
 
 // ─── Load saved settings ──────────────────────────────────────────────────────
 
@@ -12,7 +13,6 @@ async function loadSettings() {
     'showOverlay',
     'includeFullTranscript',
     'audioQualityHigh',
-    'speakerGap',
     'deleteAudioAfter',
   ]);
 
@@ -44,9 +44,6 @@ async function loadSettings() {
     if (el) el.checked = settings[id] !== undefined ? settings[id] : def;
   });
 
-  // Speaker gap
-  const gap = document.getElementById('speakerGap');
-  if (gap && settings.speakerGap) gap.value = String(settings.speakerGap);
 }
 
 // ─── Save settings ────────────────────────────────────────────────────────────
@@ -70,7 +67,6 @@ async function saveSettings() {
     showOverlay: document.getElementById('showOverlay').checked,
     includeFullTranscript: document.getElementById('includeFullTranscript').checked,
     audioQualityHigh: document.getElementById('audioQualityHigh').checked,
-    speakerGap: parseInt(document.getElementById('speakerGap').value, 10),
     deleteAudioAfter: document.getElementById('deleteAudioAfter').checked,
   });
 
@@ -207,15 +203,70 @@ function setupProviderRadios() {
 
 // ─── Init ─────────────────────────────────────────────────────────────────────
 
+// ─── Keyboard shortcuts UI ────────────────────────────────────────────────────
+
+async function loadShortcutsUI() {
+  const shortcuts = await loadShortcuts();
+  const startStopEl = document.getElementById('shortcutStartStop');
+  const copyEl = document.getElementById('shortcutCopyTranscript');
+  if (startStopEl) startStopEl.value = shortcuts.startStop;
+  if (copyEl) copyEl.value = shortcuts.copyTranscript;
+}
+
+function setupShortcutCapture() {
+  document.querySelectorAll('.btn-capture').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const input = document.getElementById(btn.dataset.target);
+      if (!input) return;
+      input.value = 'Pressione a combinação...';
+      input.style.color = 'var(--primary)';
+      btn.disabled = true;
+
+      function onKey(e) {
+        e.preventDefault();
+        const combo = eventToShortcut(e);
+        if (['ctrl', 'alt', 'shift', 'ctrl+shift', 'ctrl+alt', 'alt+shift'].includes(combo)) return;
+        input.value = combo;
+        input.style.color = '';
+        btn.disabled = false;
+        document.removeEventListener('keydown', onKey, true);
+      }
+      document.addEventListener('keydown', onKey, true);
+    });
+  });
+
+  document.querySelectorAll('.btn-reset-shortcut').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const input = document.getElementById(btn.dataset.target);
+      if (input) { input.value = btn.dataset.default; input.style.color = ''; }
+    });
+  });
+}
+
+async function saveShortcutsFromUI() {
+  const startStop = document.getElementById('shortcutStartStop')?.value.trim();
+  const copyTranscript = document.getElementById('shortcutCopyTranscript')?.value.trim();
+  if (startStop && copyTranscript) {
+    await saveShortcuts({ startStop, copyTranscript });
+  }
+}
+
+// ─── Init ─────────────────────────────────────────────────────────────────────
+
 document.addEventListener('DOMContentLoaded', async () => {
   await loadSettings();
+  await loadShortcutsUI();
   setupEyeButtons();
   setupProviderRadios();
   setupTestButtons();
+  setupShortcutCapture();
 
-  document.getElementById('btnSave')?.addEventListener('click', saveSettings);
+  document.getElementById('btnSave')?.addEventListener('click', async () => {
+    await saveSettings();
+    await saveShortcutsFromUI();
+  });
 
   document.addEventListener('keydown', (e) => {
-    if ((e.ctrlKey || e.metaKey) && e.key === 's') { e.preventDefault(); saveSettings(); }
+    if ((e.ctrlKey || e.metaKey) && e.key === 's') { e.preventDefault(); saveSettings(); saveShortcutsFromUI(); }
   });
 });

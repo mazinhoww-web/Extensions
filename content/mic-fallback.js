@@ -1,7 +1,7 @@
 // MeetScribe — Modo Sala (Microfone)
 // Uses Web Speech API for real-time transcription when no meeting platform is detected.
-// Speaker diarization is heuristic: pauses > 2s trigger a "speaker change" guess.
-// Audio is also recorded with Web Audio API processing for Gemini re-analysis at the end.
+// Speaker identification is done post-recording via AssemblyAI diarization.
+// Audio is also recorded with Web Audio API processing for AssemblyAI re-analysis at the end.
 
 (function () {
   if (window.__meetscribeMicLoaded) return;
@@ -15,25 +15,13 @@
   let recognition = null;
   let audioProcessor = null;
   let currentSpeakerIndex = 1;
-  let speakerCount = 1;
-  let lastSpeechTime = Date.now();
-  let SPEAKER_CHANGE_GAP_MS = 2500; // pause threshold for speaker change guess
   let finalTranscriptBuffer = [];
   let interimText = '';
   let overlayEl = null;
 
-  // ─── Speaker heuristic ─────────────────────────────────────────────────────
-
-  function checkSpeakerChange() {
-    const now = Date.now();
-    const gap = now - lastSpeechTime;
-    if (gap > SPEAKER_CHANGE_GAP_MS && finalTranscriptBuffer.length > 0) {
-      // Long pause — assume speaker may have changed
-      speakerCount = Math.min(speakerCount + 1, 10);
-      currentSpeakerIndex = speakerCount;
-    }
-    lastSpeechTime = now;
-  }
+  // ─── Speaker label ──────────────────────────────────────────────────────────
+  // During recording all chunks use a generic "Falante" label.
+  // Real speaker identification is done post-recording via AssemblyAI diarization.
 
   function currentSpeaker() {
     return speakerPrefix ? `${speakerPrefix} - Falante ${currentSpeakerIndex}` : `Falante ${currentSpeakerIndex}`;
@@ -61,8 +49,6 @@
     };
 
     rec.onresult = (event) => {
-      checkSpeakerChange();
-
       let interim = '';
       for (let i = event.resultIndex; i < event.results.length; i++) {
         const result = event.results[i];
@@ -140,6 +126,14 @@
       compressor.attack.value = 0.003;
       compressor.release.value = 0.25;
 
+      // Noise gate: suppress reverb tails and room echo below -55dB
+      const noiseGate = ctx.createDynamicsCompressor();
+      noiseGate.threshold.value = -55;
+      noiseGate.knee.value = 0;
+      noiseGate.ratio.value = 20;
+      noiseGate.attack.value = 0.001;
+      noiseGate.release.value = 0.1;
+
       // Gain: boost for clear input
       const gain = ctx.createGain();
       gain.gain.value = 2.0;
@@ -147,7 +141,8 @@
       const dest = ctx.createMediaStreamDestination();
       source.connect(highPass);
       highPass.connect(compressor);
-      compressor.connect(gain);
+      compressor.connect(noiseGate);
+      noiseGate.connect(gain);
       gain.connect(dest);
 
       const recorder = new MediaRecorder(dest.stream, {
@@ -239,9 +234,7 @@
     isHybridMode = options.hybridMode === true;
     speakerPrefix = options.speakerPrefix || (isHybridMode ? 'Sala' : null);
     currentSpeakerIndex = 1;
-    speakerCount = 1;
     finalTranscriptBuffer = [];
-    lastSpeechTime = Date.now();
 
     if (!isHybridMode) {
       // Standalone mic mode: create a new meeting in background
@@ -300,11 +293,35 @@
       return true;
     }
     if (msg.type === 'MEETSCRIBE_STATUS') {
-      sendResponse({ isActive, platform: 'mic', speakerCount });
+      sendResponse({ isActive, platform: 'mic' });
     }
-    if (msg.type === 'MEETSCRIBE_SET_SPEAKER_THRESHOLD') {
-      SPEAKER_CHANGE_GAP_MS = msg.value || 2500;
-      sendResponse({ ok: true });
+  });
+
+  // Tab visibility: pause/resume audio pipeline when switching tabs
+  document.addEventListener('visibilitychange', () => {
+    if (!audioProcessor) return;
+    if (document.hidden) {
+      if (audioProcessor.recorder?.state === 'recording') {
+        try { audioProcessor.recorder.requestData(); } catch (_) {}
+      }
+      if (audioProcessor.ctx?.state === 'running') {
+        audioProcessor.ctx.suspend().catch(() => {});
+      }
+    } else {
+      if (audioProcessor.ctx?.state === 'suspended') {
+        audioProcessor.ctx.resume().then(() => {
+          if (audioProcessor.recorder?.state === 'inactive') {
+            try { audioProcessor.recorder.start(30000); } catch (_) {}
+          }
+        }).catch(() => {});
+      }
+    }
+  });
+
+  // Resume AudioContext on reconnect (Chrome suspends it when offline in some cases)
+  window.addEventListener('online', () => {
+    if (audioProcessor?.ctx?.state === 'suspended') {
+      audioProcessor.ctx.resume().catch(() => {});
     }
   });
 
