@@ -40,10 +40,27 @@ function setMode(mode) {
   document.getElementById('modeMic').style.display = mode === 'mic' ? 'block' : 'none';
   document.getElementById('modeHistory').style.display = mode === 'history' ? 'block' : 'none';
 
-  if (mode === 'history') loadHistory();
+  if (mode === 'history') loadHistory(true);
 }
 
 // ─── Error display (alert() doesn't work in extension popups) ────────────────
+
+function friendlyError(err) {
+  const msg = err?.message || String(err);
+  if (msg.includes('401') || msg.includes('403') || msg.includes('PERMISSION_DENIED') ||
+      msg.includes('API_KEY_INVALID') || msg.includes('invalid_api_key'))
+    return t('errorInvalidApiKey');
+  if (msg.includes('429') || msg.includes('quota') || msg.includes('rate') ||
+      msg.includes('RESOURCE_EXHAUSTED'))
+    return t('errorQuotaExceeded');
+  if (msg.includes('Failed to fetch') || msg.includes('NetworkError') ||
+      msg.includes('network') || msg.includes('ERR_INTERNET'))
+    return t('errorNetwork');
+  if (msg.includes('API key') || msg.includes('API_KEY_MISSING') ||
+      msg.includes('não configurada'))
+    return t('errorNoApiKey');
+  return msg;
+}
 
 function showError(msg) {
   const el = document.getElementById('errorBanner');
@@ -121,9 +138,7 @@ function escapeHtml(str) {
 async function detectPlatforms() {
   try {
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-    if (!tab?.url) return;
-
-    const url = tab.url;
+    const url = tab?.url || '';
     const meetEl = document.getElementById('meetStatus');
     const teamsEl = document.getElementById('teamsStatus');
     const hybridToggle = document.getElementById('hybridModeToggle');
@@ -140,7 +155,6 @@ async function detectPlatforms() {
       teamsEl.className = 'platform-status detected';
     }
 
-    // Auto-select platform tab and pre-check hybrid mode when on a meeting platform
     if (onMeet || onTeams) {
       setMode('platform');
       if (hybridToggle) {
@@ -148,8 +162,35 @@ async function detectPlatforms() {
         const tip = document.getElementById('multilingualTip');
         if (tip) tip.style.display = 'block';
       }
+    } else {
+      // Show empty-state guidance when not on a meeting platform
+      showEmptyState();
     }
   } catch (_) {}
+}
+
+function showEmptyState() {
+  const existing = document.getElementById('emptyStateMsg');
+  if (existing) return; // already shown
+
+  const modePlatform = document.getElementById('modePlatform');
+  if (!modePlatform) return;
+
+  const el = document.createElement('div');
+  el.id = 'emptyStateMsg';
+  el.style.cssText = `
+    background: rgba(63,81,181,0.05);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 14px 16px;
+    margin-bottom: 12px;
+    font-size: 12px;
+    color: var(--text-muted);
+    line-height: 1.6;
+    text-align: center;
+  `;
+  el.innerHTML = `<span style="font-size:18px;display:block;margin-bottom:6px;">🎯</span>${escapeHtml(t('noMeetingDetected'))}`;
+  modePlatform.prepend(el);
 }
 
 // ─── Check API key ────────────────────────────────────────────────────────────
@@ -203,7 +244,7 @@ async function startPlatformRecording() {
 
     enterRecordingView(meeting);
   } catch (err) {
-    showError(`Erro ao iniciar: ${err.message}. Certifique-se de estar em uma reunião ativa.`);
+    showError(friendlyError(err));
   }
 }
 
@@ -243,7 +284,7 @@ async function startHybridRecording() {
 
     enterRecordingView(meeting);
   } catch (err) {
-    showError(`Erro ao iniciar modo híbrido: ${err.message}`);
+    showError(friendlyError(err));
   }
 }
 
@@ -375,7 +416,7 @@ async function stopAndGenerate() {
 
     showMinutes(minutesMarkdown);
   } catch (err) {
-    showError(`Erro ao gerar ata: ${err.message}`);
+    showError(friendlyError(err));
     showView('idle');
     setHeaderBadge('Inativo', '');
   }
@@ -441,7 +482,7 @@ async function generateFromEndedMeeting(endedMeeting) {
 
     showMinutes(minutesMarkdown);
   } catch (err) {
-    showError(`Erro ao gerar ata: ${err.message}`);
+    showError(friendlyError(err));
     showView('idle');
     setHeaderBadge('Inativo', '');
   }
@@ -509,65 +550,98 @@ function showMinutes(markdown) {
 
 // ─── History ──────────────────────────────────────────────────────────────────
 
-async function loadHistory() {
+const HISTORY_PAGE_SIZE = 10;
+let historyPage = 0;
+let historyAll = [];
+
+async function loadHistory(reset = true) {
+  if (reset) historyPage = 0;
   const { meetings = [] } = await chrome.runtime.sendMessage({ type: 'GET_MEETINGS_HISTORY' });
+  historyAll = meetings;
+  renderHistory();
+}
+
+function renderHistory() {
   const list = document.getElementById('historyList');
   if (!list) return;
 
-  if (meetings.length === 0) {
-    list.innerHTML = '<p style="color:var(--text-muted);font-size:12px;text-align:center;padding:16px 0;">Nenhuma reunião no histórico.</p>';
+  if (historyAll.length === 0) {
+    list.innerHTML = `<p style="color:var(--text-muted);font-size:12px;text-align:center;padding:16px 0;">${escapeHtml(t('noHistory'))}</p>`;
     return;
   }
 
   const PLATFORM = { 'google-meet': '🎥 Meet', teams: '💼 Teams', mic: '🎤 Offline', hybrid: '🔀 Híbrido' };
+  const visibleMeetings = historyAll.slice(0, (historyPage + 1) * HISTORY_PAGE_SIZE);
+  const hasMore = historyAll.length > visibleMeetings.length;
+  const hasAnyMinutes = historyAll.some((m) => m.minutesMarkdown);
 
-  list.innerHTML = meetings.map((m) => {
+  list.innerHTML = visibleMeetings.map((m) => {
     const date = new Date(m.startTime).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit' });
     const dur  = m.endTime ? `${Math.round((m.endTime - m.startTime) / 60000)} min` : '—';
     const plat = PLATFORM[m.platform] || m.platform;
     const preview = m.minutesMarkdown
       ? escapeHtml(m.minutesMarkdown.replace(/[#*`>]/g, '').slice(0, 160).trim())
-      : '<em style="color:var(--text-muted)">Sem ata gerada</em>';
+      : `<em style="color:var(--text-muted)">${escapeHtml(t('noMinutesGenerated'))}</em>`;
     const hasAta = !!m.minutesMarkdown;
     return `
       <div class="history-item" data-id="${m.id}">
         <div class="history-card-header">
           <div>
-            <div class="h-title">${escapeHtml(m.title || 'Reunião sem título')}</div>
+            <div class="h-title">${escapeHtml(m.title || t('noTitle'))}</div>
             <div class="h-meta">${date} · ${dur} · ${plat}</div>
           </div>
         </div>
         ${hasAta ? `<div class="h-preview">${preview}</div>` : ''}
         <div class="history-actions">
-          ${hasAta ? `<button class="h-action-btn h-view" data-id="${m.id}">👁 Ver ata</button>` : ''}
-          ${hasAta ? `<button class="h-action-btn h-copy" data-id="${m.id}">📋 Copiar</button>` : ''}
+          ${hasAta ? `<button class="h-action-btn h-view" data-id="${m.id}">${escapeHtml(t('viewMinutes'))}</button>` : ''}
+          ${hasAta ? `<button class="h-action-btn h-copy" data-id="${m.id}">${escapeHtml(t('copy'))}</button>` : ''}
           ${hasAta ? `<button class="h-action-btn h-txt" data-id="${m.id}">⬇ TXT</button>` : ''}
-          <button class="h-action-btn danger h-delete" data-id="${m.id}">🗑</button>
+          <button class="h-action-btn danger h-delete" data-id="${m.id}">${escapeHtml(t('delete'))}</button>
         </div>
       </div>`;
   }).join('');
 
+  // "Show more" button
+  if (hasMore) {
+    const moreBtn = document.createElement('button');
+    moreBtn.className = 'btn btn-outline btn-sm';
+    moreBtn.style.marginTop = '8px';
+    moreBtn.textContent = t('showMore');
+    moreBtn.addEventListener('click', () => { historyPage++; renderHistory(); });
+    list.appendChild(moreBtn);
+  }
+
+  // "Export all" button
+  if (hasAnyMinutes) {
+    const exportBtn = document.createElement('button');
+    exportBtn.className = 'btn btn-outline btn-sm';
+    exportBtn.style.marginTop = '8px';
+    exportBtn.textContent = t('exportAllMinutes');
+    exportBtn.addEventListener('click', () => exportAllMinutes(historyAll));
+    list.appendChild(exportBtn);
+  }
+
   // Wire up action buttons
   list.querySelectorAll('.h-view').forEach((btn) => {
     btn.addEventListener('click', () => {
-      const m = meetings.find((x) => String(x.id) === String(btn.dataset.id));
+      const m = historyAll.find((x) => String(x.id) === String(btn.dataset.id));
       if (m?.minutesMarkdown) { minutesMarkdown = m.minutesMarkdown; meeting = m; showMinutes(m.minutesMarkdown); }
     });
   });
 
   list.querySelectorAll('.h-copy').forEach((btn) => {
     btn.addEventListener('click', async () => {
-      const m = meetings.find((x) => String(x.id) === String(btn.dataset.id));
+      const m = historyAll.find((x) => String(x.id) === String(btn.dataset.id));
       if (!m?.minutesMarkdown) return;
       const ok = await copyToClipboard(m.minutesMarkdown);
       btn.textContent = ok ? '✅' : '❌';
-      setTimeout(() => { btn.textContent = '📋 Copiar'; }, 1500);
+      setTimeout(() => { btn.textContent = t('copy'); }, 1500);
     });
   });
 
   list.querySelectorAll('.h-txt').forEach((btn) => {
     btn.addEventListener('click', () => {
-      const m = meetings.find((x) => String(x.id) === String(btn.dataset.id));
+      const m = historyAll.find((x) => String(x.id) === String(btn.dataset.id));
       if (m?.minutesMarkdown) exportTXT(m.minutesMarkdown, `ata-${m.id}.txt`);
     });
   });
@@ -576,9 +650,20 @@ async function loadHistory() {
     btn.addEventListener('click', async () => {
       btn.textContent = '⏳';
       await chrome.runtime.sendMessage({ type: 'DELETE_MEETING', id: btn.dataset.id });
-      await loadHistory(); // re-render
+      historyAll = historyAll.filter((m) => String(m.id) !== String(btn.dataset.id));
+      renderHistory();
     });
   });
+}
+
+function exportAllMinutes(meetings) {
+  const withMinutes = meetings.filter((m) => m.minutesMarkdown);
+  if (withMinutes.length === 0) return;
+  const combined = withMinutes.map((m) => {
+    const date = new Date(m.startTime).toLocaleDateString('pt-BR');
+    return `${'='.repeat(60)}\n${m.title || 'Reunião'} — ${date}\n${'='.repeat(60)}\n\n${m.minutesMarkdown}`;
+  }).join('\n\n');
+  exportTXT(combined, `atas-meetscribe-${new Date().toISOString().slice(0, 10)}.txt`);
 }
 
 // ─── Cancel recording (with confirmation modal) ────────────────────────────────
@@ -886,29 +971,15 @@ function applyI18n() {
 
 // ─── Onboarding ───────────────────────────────────────────────────────────────
 
-const ONBOARDING_STEPS = [
-  {
-    title: '👋 Bem-vindo ao MeetScribe!',
-    body: 'Transcreva reuniões e gere atas completas com IA — automaticamente. Vamos configurar tudo em menos de 2 minutos.',
-  },
-  {
-    title: '🔑 Configure sua API key',
-    body: 'O MeetScribe usa Gemini ou Groq para gerar atas. Ambos são gratuitos. Clique em <strong>Configurações</strong> no rodapé para adicionar sua chave.',
-  },
-  {
-    title: '🎙️ Inicie uma reunião',
-    body: 'Entre no Google Meet ou Teams e o MeetScribe inicia automaticamente. Para reuniões presenciais, use a aba <strong>Modo Sala</strong>.',
-  },
-  {
-    title: '📝 Sua ata em segundos',
-    body: 'Ao encerrar, clique em <strong>Encerrar e Gerar Ata</strong>. A ata é gerada com resumo, decisões e próximos passos.',
-  },
-  {
-    title: '✅ Pronto!',
-    body: 'Você está pronto para usar o MeetScribe. Boa reunião!',
-    isLast: true,
-  },
-];
+function buildOnboardingSteps() {
+  return [
+    { title: `👋 ${t('onboarding1Title')}`, body: t('onboarding1Body') },
+    { title: `🔑 ${t('onboarding2Title')}`, body: t('onboarding2Body') },
+    { title: `🎙️ ${t('onboarding3Title')}`, body: t('onboarding3Body') },
+    { title: `📝 ${t('onboarding4Title')}`, body: t('onboarding4Body') },
+    { title: `✅ ${t('onboarding5Title')}`, body: t('onboarding5Body'), isLast: true },
+  ];
+}
 
 async function maybeShowOnboarding() {
   const { geminiApiKey, groqApiKey, onboardingComplete } = await chrome.storage.sync.get([
@@ -918,6 +989,7 @@ async function maybeShowOnboarding() {
   if (onboardingComplete || geminiApiKey || groqApiKey) return;
 
   let currentStep = 0;
+  const STEPS = buildOnboardingSteps();
   const overlay = document.getElementById('onboardingOverlay');
   const stepEl   = document.getElementById('onboardingStep');
   const dotsEl   = document.getElementById('onboardingDots');
@@ -926,17 +998,17 @@ async function maybeShowOnboarding() {
   if (!overlay || !stepEl) return;
 
   function renderStep(idx) {
-    const step = ONBOARDING_STEPS[idx];
+    const step = STEPS[idx];
     stepEl.innerHTML = `
       <h3 style="font-size:15px;margin-bottom:8px;">${step.title}</h3>
       <p style="font-size:13px;color:var(--text-muted);line-height:1.5;">${step.body}</p>
     `;
     // Update dots
-    dotsEl.innerHTML = ONBOARDING_STEPS.map((_, i) =>
+    dotsEl.innerHTML = STEPS.map((_, i) =>
       `<span style="width:7px;height:7px;border-radius:50%;background:${i === idx ? 'var(--primary)' : 'var(--border)'};display:inline-block;"></span>`
     ).join('');
     // Update button
-    nextBtn.textContent = step.isLast ? '✅ Começar' : 'Próximo →';
+    nextBtn.textContent = step.isLast ? `✅ ${t('onboardingStart')}` : t('onboardingNext');
   }
 
   function close() {
@@ -944,16 +1016,19 @@ async function maybeShowOnboarding() {
     chrome.storage.sync.set({ onboardingComplete: true });
   }
 
+  if (skipBtn) {
+    skipBtn.textContent = t('onboardingSkip');
+    skipBtn.addEventListener('click', close);
+  }
+
   nextBtn.addEventListener('click', () => {
-    if (currentStep < ONBOARDING_STEPS.length - 1) {
+    if (currentStep < STEPS.length - 1) {
       currentStep++;
       renderStep(currentStep);
     } else {
       close();
     }
   });
-
-  skipBtn.addEventListener('click', close);
 
   renderStep(0);
   overlay.style.display = 'flex';

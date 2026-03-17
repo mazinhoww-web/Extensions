@@ -119,10 +119,10 @@ async function endMeeting() {
   meeting.endTime = Date.now();
   await chrome.storage.local.set({ currentMeeting: meeting });
 
-  // Save to history (last 10 meetings, without audio blobs)
+  // Save to history (last 50 meetings)
   const { meetings = [] } = await chrome.storage.local.get('meetings');
   meetings.unshift({ ...meeting });
-  if (meetings.length > 10) meetings.splice(10);
+  if (meetings.length > 50) meetings.splice(50);
   await chrome.storage.local.set({ meetings });
 
   return meeting;

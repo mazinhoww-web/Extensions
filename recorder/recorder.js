@@ -59,6 +59,22 @@ function setGeneratingStatus(text, percent) {
   }
 }
 
+function friendlyError(err) {
+  const msg = err?.message || String(err);
+  if (msg.includes('401') || msg.includes('403') || msg.includes('PERMISSION_DENIED') ||
+      msg.includes('API_KEY_INVALID') || msg.includes('invalid_api_key'))
+    return 'Chave de API inválida ou expirada. Atualize nas Configurações.';
+  if (msg.includes('429') || msg.includes('quota') || msg.includes('rate') ||
+      msg.includes('RESOURCE_EXHAUSTED'))
+    return 'Limite de uso da API atingido. Aguarde alguns minutos ou configure uma chave alternativa.';
+  if (msg.includes('Failed to fetch') || msg.includes('NetworkError') ||
+      msg.includes('network'))
+    return 'Sem conexão com a internet. Verifique sua rede e tente novamente.';
+  if (msg.includes('não configurada') || msg.includes('API key'))
+    return 'Nenhuma chave de API configurada. Acesse as Configurações para adicionar.';
+  return msg;
+}
+
 function showError(msg) {
   const el = document.getElementById('errorBanner');
   if (!el) return;
@@ -372,9 +388,19 @@ async function startRecording() {
     currentSpeakerIndex = 1;
     lastSpeechTime = Date.now();
 
-    // Start speech recognition
-    setupRecognition();
-    recognition.start();
+    // Check if live transcription is available
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    const speechUnavailable = !SR || !navigator.onLine;
+    if (speechUnavailable) {
+      const banner = document.getElementById('speechUnavailableBanner');
+      if (banner) banner.style.display = 'block';
+    }
+
+    // Start speech recognition (only if available)
+    if (!speechUnavailable) {
+      setupRecognition();
+      recognition.start();
+    }
 
     // Start audio pipeline (non-blocking — failure is non-fatal)
     startAudioPipeline();
@@ -394,7 +420,7 @@ async function startRecording() {
     if (count) count.textContent = '0 trechos capturados';
 
   } catch (err) {
-    showError(`Erro ao iniciar gravação: ${err.message}`);
+    showError(friendlyError(err));
   }
 }
 
@@ -479,7 +505,7 @@ async function generateAta() {
     showMinutes(minutesMarkdown);
 
   } catch (err) {
-    showError(`Erro ao gerar ata: ${err.message}`);
+    showError(friendlyError(err));
     showState('idle');
     setStatus('Pronto', '');
   }

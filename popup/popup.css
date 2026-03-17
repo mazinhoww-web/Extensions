@@ -25,9 +25,16 @@ body.dark-mode {
   --shadow: 0 2px 12px rgba(0,0,0,0.4);
 }
 
+html {
+  width: 380px;
+  min-height: 480px;
+  max-height: 600px;
+  overflow-y: auto;
+}
+
 body {
   width: 380px;
-  min-height: 200px;
+  min-height: 480px;
   max-height: 600px;
   font-family: 'Segoe UI', system-ui, sans-serif;
   font-size: 13px;

@@ -11,23 +11,24 @@ export function exportTXT(markdownContent, filename) {
 }
 
 // ─── PDF Export ───────────────────────────────────────────────────────────────
+// window.open + print() is unreliable in extension context (blocked by popup
+// blockers). Instead, we download an HTML file that the user can open and
+// print as PDF (Ctrl+P → Save as PDF) from any browser.
 
 export function exportPDF(markdownContent, title) {
-  // Open a styled print window with the formatted content
   const html = markdownToHTML(markdownContent, title);
-  const win = window.open('', '_blank');
-  if (!win) {
-    alert('Permita pop-ups para exportar PDF.');
-    return;
+  const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
+  const filename = `ata-reuniao-${dateStamp()}.html`;
+
+  // Use chrome.downloads if available (extension context), otherwise fallback
+  if (typeof chrome !== 'undefined' && chrome.downloads?.download) {
+    const url = URL.createObjectURL(blob);
+    chrome.downloads.download({ url, filename, saveAs: true }, () => {
+      setTimeout(() => URL.revokeObjectURL(url), 5000);
+    });
+  } else {
+    triggerDownload(blob, filename);
   }
-  win.document.write(html);
-  win.document.close();
-  win.onload = () => {
-    setTimeout(() => {
-      win.print();
-      // Optionally close after print dialog
-    }, 500);
-  };
 }
 
 // ─── Clipboard ────────────────────────────────────────────────────────────────
