@@ -337,11 +337,22 @@
     }
   });
 
-  // ─── Overlay keep-alive ───────────────────────────────────────────────────────
+  // ─── Overlay keep-alive + auto-stop detection ────────────────────────────────
+  let callEndedCount = 0;
   let captionCheckInterval = setInterval(() => {
     if (!isActive) return;
     const container = findElement(CONTAINER_SELECTORS);
     if (container && !overlayEl) showOverlay();
+
+    // Auto-stop: detect when user has left the call (leave button gone from DOM)
+    if (!isInActiveCall()) {
+      callEndedCount++;
+      if (callEndedCount >= 2) { // 2 × 2s = 4s of confirmation before triggering
+        deactivate();
+      }
+    } else {
+      callEndedCount = 0;
+    }
   }, 2000);
 
   // ─── Auto-start detection ─────────────────────────────────────────────────────
@@ -349,13 +360,24 @@
   // and auto-activates recording without requiring a manual click.
 
   const MEET_LEAVE_SELECTORS = [
+    // EN
     '[data-tooltip="Leave call"]',
     '[aria-label="Leave call"]',
+    // PT-BR
+    '[data-tooltip="Sair da chamada"]',
+    '[aria-label="Sair da chamada"]',
+    // ES
+    '[data-tooltip="Salir de la llamada"]',
+    '[aria-label="Salir de la llamada"]',
+    // FR
+    '[data-tooltip="Quitter l\'appel"]',
+    '[aria-label="Quitter l\'appel"]',
+    // Structural (language-independent)
     '[jsname="CQylAd"]',
   ];
 
   function isInActiveCall() {
-    if (!/meet\.google\.com\/[a-z]+-[a-z]+-[a-z]+/.test(location.href)) return false;
+    if (!/meet\.google\.com\/.+/.test(location.href)) return false;
     return MEET_LEAVE_SELECTORS.some((sel) => document.querySelector(sel));
   }
 

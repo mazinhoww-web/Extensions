@@ -370,6 +370,72 @@ async function stopAndGenerate() {
   }
 }
 
+// ─── Generate minutes from an already-ended meeting (no END_MEETING/deactivate) ──
+
+async function generateFromEndedMeeting(endedMeeting) {
+  showView('generating');
+  setHeaderBadge('Gerando...', '');
+
+  try {
+    updateGeneratingStatus('Normalizando transcrição...', 10);
+
+    const { chunks: audioChunks } = await chrome.runtime.sendMessage({ type: 'GET_AUDIO_CHUNKS' });
+    const allCaptions = endedMeeting.captionChunks || captionChunks;
+
+    const isSalaMode = ['mic', 'hybrid'].includes(endedMeeting?.platform);
+    let assemblyTranscript = null;
+    let geminiTranscript = null;
+
+    if (audioChunks?.length > 0) {
+      if (isSalaMode) {
+        updateGeneratingStatus('Identificando falantes por voz...', 25);
+        assemblyTranscript = await transcribeWithAssemblyAI(audioChunks).catch((err) => {
+          console.warn('[MeetScribe] AssemblyAI falhou, usando transcrição local:', err.message);
+          return null;
+        });
+      } else {
+        const { geminiApiKey } = await chrome.storage.sync.get('geminiApiKey');
+        if (geminiApiKey) {
+          updateGeneratingStatus('Analisando áudio com IA...', 35);
+          geminiTranscript = await transcribeAudioWithGemini(geminiApiKey, audioChunks, allCaptions);
+        }
+      }
+    }
+
+    updateGeneratingStatus('Normalizando e reconciliando texto...', 50);
+    const captionsForNormalize = (isSalaMode && assemblyTranscript) ? assemblyTranscript : allCaptions;
+    const geminiForNormalize   = (isSalaMode && assemblyTranscript) ? null : geminiTranscript;
+    const normalizedTranscript = normalizeTranscript(captionsForNormalize, geminiForNormalize);
+
+    await chrome.runtime.sendMessage({
+      type: 'SAVE_FIELD',
+      field: 'normalizedTranscript',
+      value: normalizedTranscript,
+    });
+
+    updateGeneratingStatus('Gerando ata com IA...', 65);
+    minutesMarkdown = await generateMinutes(
+      endedMeeting,
+      normalizedTranscript,
+      updateGeneratingStatus
+    );
+
+    updateGeneratingStatus('Salvando resultados...', 95);
+    await chrome.runtime.sendMessage({
+      type: 'SAVE_FIELD',
+      field: 'minutesMarkdown',
+      value: minutesMarkdown,
+    });
+    updateGeneratingStatus('Concluído!', 100);
+
+    showMinutes(minutesMarkdown);
+  } catch (err) {
+    showError(`Erro ao gerar ata: ${err.message}`);
+    showView('idle');
+    setHeaderBadge('Inativo', '');
+  }
+}
+
 function updateGeneratingStatus(text, percent) {
   const el = document.getElementById('generatingStatus');
   if (el) el.textContent = text;
@@ -379,13 +445,55 @@ function updateGeneratingStatus(text, percent) {
   }
 }
 
+// ─── Markdown → HTML renderer (no external deps, covers Gemini minutes output) ─
+
+function renderMarkdown(md) {
+  if (!md) return '<em style="color:var(--text-muted)">Sem conteúdo gerado.</em>';
+  // Escape HTML first to prevent XSS from AI-generated content
+  let html = md
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+  // Headers
+  html = html
+    .replace(/^### (.+)$/gm, '<h3>$1</h3>')
+    .replace(/^## (.+)$/gm, '<h2>$1</h2>')
+    .replace(/^# (.+)$/gm, '<h1>$1</h1>');
+  // Bold and italic
+  html = html
+    .replace(/\*\*\*(.+?)\*\*\*/g, '<strong><em>$1</em></strong>')
+    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+    .replace(/\*(.+?)\*/g, '<em>$1</em>');
+  // Horizontal rule
+  html = html.replace(/^---$/gm, '<hr>');
+  // Table rows — wrap pipe-delimited lines in a simple table
+  html = html.replace(/((?:^\|.+\|\n?)+)/gm, (block) => {
+    const rows = block.trim().split('\n').filter((r) => !/^\|[-| :]+\|/.test(r));
+    if (rows.length === 0) return block;
+    const tableRows = rows.map((row, i) => {
+      const cells = row.replace(/^\||\|$/g, '').split('|');
+      const tag = i === 0 ? 'th' : 'td';
+      return `<tr>${cells.map((c) => `<${tag}>${c.trim()}</${tag}>`).join('')}</tr>`;
+    });
+    return `<table>${tableRows.join('')}</table>`;
+  });
+  // List items
+  html = html.replace(/^[-*] (.+)$/gm, '<li>$1</li>');
+  html = html.replace(/(<li>[\s\S]*?<\/li>)(\n<li>[\s\S]*?<\/li>)*/g, (m) => `<ul>${m}</ul>`);
+  // Paragraphs: double newline → paragraph break
+  html = html.replace(/\n\n+/g, '</p><p>');
+  // Remaining single newlines
+  html = html.replace(/\n/g, '<br>');
+  return `<div>${html}</div>`;
+}
+
 // ─── Show minutes ─────────────────────────────────────────────────────────────
 
 function showMinutes(markdown) {
   showView('minutes');
   setHeaderBadge('Ata Pronta ✓', '');
   const preview = document.getElementById('minutesPreview');
-  if (preview) preview.textContent = markdown;
+  if (preview) preview.innerHTML = renderMarkdown(markdown);
 }
 
 // ─── History ──────────────────────────────────────────────────────────────────
@@ -518,6 +626,11 @@ async function checkExistingMeeting() {
         enterRecordingView(m);
         captionChunks.slice(-10).forEach(addChunkToPreview);
       }
+    } else if (m?.endTime && !m.minutesMarkdown) {
+      // Meeting ended (e.g. user left call) but minutes were never generated — auto-generate now
+      meeting = m;
+      captionChunks = m.captionChunks || [];
+      await generateFromEndedMeeting(m);
     } else if (m?.minutesMarkdown) {
       minutesMarkdown = m.minutesMarkdown;
       showMinutes(minutesMarkdown);
