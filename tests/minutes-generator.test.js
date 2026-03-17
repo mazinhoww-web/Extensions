@@ -59,6 +59,7 @@ describe('generateMinutes', () => {
 
   afterEach(() => {
     vi.restoreAllMocks()
+    vi.useRealTimers()
   })
 
   it('deve_lancar_erro_quando_nenhuma_api_key_esta_configurada', async () => {
@@ -267,6 +268,7 @@ describe('generateMinutes', () => {
     chrome._syncStore.geminiApiKey = 'chave-gemini'
 
     global.fetch = vi.fn(async (url) => {
+      if (url.includes('gemini-2.5-flash')) return errorResponse(429, 'rate limited')
       if (url.includes('gemini-2.0-flash')) return errorResponse(429, 'rate limited')
       if (url.includes('gemini-1.5-flash')) return geminiOkResponse('ata pelo 1.5')
       return errorResponse(500)
@@ -274,13 +276,12 @@ describe('generateMinutes', () => {
 
     const resultPromise = generateMinutes(meetingFixture(), [])
 
-    // Avança além dos delays de retry (5s + 10s + 20s = 35s total)
-    await vi.advanceTimersByTimeAsync(40000)
+    // 2.5-flash retries: 5+10+20=35s; 2.0-flash retries: 5+10+20=35s; total: 70s
+    await vi.advanceTimersByTimeAsync(80000)
     const result = await resultPromise
 
     expect(result).toContain('ata pelo 1.5')
-    vi.useRealTimers()
-  })
+  }, 15000)
 })
 
 // ─── transcribeAudioWithGemini ────────────────────────────────────────────────

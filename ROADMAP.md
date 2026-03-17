@@ -200,23 +200,30 @@ B5 (Remover heurística pausa)
 
 ## Sprint Planning
 
-### Sprint 1 — Qualidade de Gravação e Diarização ✅ atual
+### Sprint 1 — Qualidade de Gravação e Diarização ✅ FECHADA
 > Foco: fazer o Modo Sala funcionar com qualidade profissional de identificação de voz.
 
 - [x] Auto-start gravação ao entrar no Meet/Teams
-- [x] Diarização real por voz no Modo Sala via AssemblyAI (M8) ← **entregue nesta sprint**
+- [x] Diarização real por voz no Modo Sala via AssemblyAI (M8)
+- [x] QA: 105/105 testes passando (corrigidos 5 testes do suite de minutes-generator)
+- [ ] B1: Fix captura em abas inativas → **movido para Sprint 2**
+- [ ] B2: Melhoria em salas com eco → **movido para Sprint 2**
+- [ ] B3: Fix bug de reconexão → **movido para Sprint 2**
+- [ ] B4: Fix dessincronismo de legendas → **movido para Sprint 2**
+- [ ] B5: Remover setting "Pausa para troca de falante" → **movido para Sprint 2**
+- [ ] B6: Transcrição completa no modo offline → **movido para Sprint 2**
+
+---
+
+### Sprint 2 — Bug Fixes + UX e Interface
+> Foco: estabilidade + reduzir atrito para novos usuários e modernizar a interface.
+
 - [ ] B1: Fix captura em abas inativas (Chrome throttling pausava gravação ao trocar aba)
 - [ ] B2: Melhoria em salas com eco (algoritmo de diarização mais robusto com reverberação)
 - [ ] B3: Fix bug de reconexão após queda de internet
 - [ ] B4: Fix dessincronismo de legendas em alta latência
 - [ ] B5: Remover setting "Pausa para troca de falante" do options (substituído pelo AssemblyAI)
 - [ ] B6: Transcrição completa ausente no modo offline
-
----
-
-### Sprint 2 — UX, Onboarding e Interface
-> Foco: reduzir atrito para novos usuários e modernizar a interface.
-
 - [ ] M1: Redesign do popup (histórico de reuniões + ações rápidas)
 - [ ] M2: Onboarding interativo (tour guiado <2 min para novos usuários)
 - [ ] M3: Dark/Light mode no popup
