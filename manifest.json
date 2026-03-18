@@ -57,16 +57,5 @@
   "options_ui": {
     "page": "options/options.html",
     "open_in_tab": true
-  },
-  "web_accessible_resources": [
-    {
-      "resources": ["utils/*.js"],
-      "matches": [
-        "https://meet.google.com/*",
-        "https://teams.microsoft.com/*",
-        "https://teams.live.com/*",
-        "https://*.teams.microsoft.com/*"
-      ]
-    }
-  ]
+  }
 }
