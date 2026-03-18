@@ -433,7 +433,10 @@ async function stopAndGenerate() {
           updateGeneratingStatus('Analisando áudio com IA...', 35);
           geminiTranscript = await retryWithBackoff(
             () => transcribeAudioWithGemini(geminiApiKey, audioChunks, allCaptions)
-          );
+          ).catch((err) => {
+            console.warn('[MeetScribe] Gemini audio transcription failed:', err.message);
+            return null;
+          });
         }
       }
     }
@@ -513,7 +516,10 @@ async function generateFromEndedMeeting(endedMeeting) {
           updateGeneratingStatus('Analisando áudio com IA...', 35);
           geminiTranscript = await retryWithBackoff(
             () => transcribeAudioWithGemini(geminiApiKey, audioChunks, allCaptions)
-          );
+          ).catch((err) => {
+            console.warn('[MeetScribe] Gemini audio transcription failed:', err.message);
+            return null;
+          });
         }
       }
     }
@@ -842,8 +848,15 @@ document.addEventListener('DOMContentLoaded', async () => {
   // Hybrid toggle: show/hide multilingual tip, and auto-show if already checked on load
   const hybridToggle = document.getElementById('hybridModeToggle');
   const multilingualTip = document.getElementById('multilingualTip');
+  // Restore persisted hybrid mode preference
+  const { hybridMode } = await chrome.storage.sync.get('hybridMode');
+  if (hybridToggle && hybridMode) {
+    hybridToggle.checked = true;
+    if (multilingualTip) multilingualTip.style.display = 'block';
+  }
   hybridToggle?.addEventListener('change', (e) => {
     if (multilingualTip) multilingualTip.style.display = e.target.checked ? 'block' : 'none';
+    chrome.storage.sync.set({ hybridMode: e.target.checked });
   });
   document.getElementById('tipGoOptions')?.addEventListener('click', () =>
     chrome.runtime.openOptionsPage()
@@ -907,13 +920,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     versionEl.textContent = `MeetScribe v${version}`;
   }
 
-  // Changelog link — opens ROADMAP.md or a GitHub releases page if available
   document.getElementById('footerChangelog')?.addEventListener('click', () => {
-    const changelogUrl = chrome.runtime.getURL('PRIVACY_POLICY.md');
-    // Open the extension's own page (ROADMAP when available, fallback to privacy policy)
-    chrome.tabs.create({ url: 'https://github.com/mazinhoww/meetscribe/releases' }).catch(() => {
-      chrome.tabs.create({ url: changelogUrl });
-    });
+    chrome.tabs.create({ url: 'https://github.com/mazinhoww/meetscribe/releases' });
   });
 
   // i18n: load language and apply to static UI elements

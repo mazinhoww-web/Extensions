@@ -290,7 +290,7 @@ Seja preciso e mantenha todas as informações ditas.`;
       body: JSON.stringify(body),
     });
 
-    if (!res.ok) return null;
+    if (!res.ok) throw new Error(`Gemini transcription error ${res.status}`);
     const data = await res.json();
     return data?.candidates?.[0]?.content?.parts?.[0]?.text || null;
   } catch (err) {
