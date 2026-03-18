@@ -221,6 +221,11 @@ async function checkApiKey() {
   const hasKey = geminiApiKey || groqApiKey;
   const warning = document.getElementById('apiWarning');
   if (warning) warning.style.display = hasKey ? 'none' : 'flex';
+  const startBtns = ['btnStartPlatform', 'btnStartMic'];
+  startBtns.forEach((id) => {
+    const btn = document.getElementById(id);
+    if (btn) btn.disabled = !hasKey;
+  });
   return !!hasKey;
 }
 
@@ -257,7 +262,7 @@ async function startPlatformRecording() {
   setButtonLoading('btnStartPlatform', 'Iniciando...');
   try {
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-    if (!tab) { clearButtonLoading('btnStartPlatform'); return showError('Nenhuma aba ativa encontrada.'); }
+    if (!tab) { clearButtonLoading('btnStartPlatform'); return showError(t('errorNoActiveTab')); }
 
     const url = tab.url || '';
     const isMeetingUrl = url.includes('meet.google.com') ||
@@ -265,7 +270,7 @@ async function startPlatformRecording() {
 
     if (!isMeetingUrl) {
       clearButtonLoading('btnStartPlatform');
-      showError('Acesse uma reunião no Google Meet ou Microsoft Teams primeiro, depois clique em Iniciar.');
+      showError(t('errorNotOnMeet'));
       return;
     }
 
@@ -296,14 +301,14 @@ async function startHybridRecording() {
   await warnIfNoAssemblyAI();
   try {
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-    if (!tab) return showError('Nenhuma aba ativa encontrada.');
+    if (!tab) return showError(t('errorNoActiveTab'));
 
     const url = tab.url || '';
     const isMeetingUrl = url.includes('meet.google.com') ||
       url.includes('teams.microsoft.com') || url.includes('teams.live.com');
 
     if (!isMeetingUrl) {
-      showError('Acesse uma reunião no Google Meet ou Microsoft Teams primeiro, depois clique em Iniciar.');
+      showError(t('errorNotOnMeet'));
       return;
     }
 
@@ -446,6 +451,13 @@ async function stopAndGenerate() {
     const geminiForNormalize   = (isSalaMode && assemblyTranscript) ? null : geminiTranscript;
     const normalizedTranscript = normalizeTranscript(captionsForNormalize, geminiForNormalize);
 
+    if (!normalizedTranscript || normalizedTranscript.length === 0) {
+      showError(t('errorEmptyTranscript'));
+      showView('idle');
+      setHeaderBadge('Inativo', '');
+      return;
+    }
+
     // Save normalized transcript
     await chrome.runtime.sendMessage({
       type: 'SAVE_FIELD',
@@ -478,10 +490,19 @@ async function stopAndGenerate() {
     updateGeneratingStatus('Concluído!', 100);
 
     showMinutes(minutesMarkdown);
+    if (isSalaMode && assemblyTranscript === null && audioChunks?.length > 0) {
+      const banner = document.getElementById('errorBanner');
+      if (banner) {
+        banner.textContent = t('warnAssemblyFallback');
+        banner.style.display = 'block';
+      }
+    }
   } catch (err) {
     showError(friendlyError(err));
     showView('idle');
     setHeaderBadge('Inativo', '');
+  } finally {
+    clearButtonLoading('btnStop');
   }
 }
 
@@ -529,6 +550,13 @@ async function generateFromEndedMeeting(endedMeeting) {
     const geminiForNormalize   = (isSalaMode && assemblyTranscript) ? null : geminiTranscript;
     const normalizedTranscript = normalizeTranscript(captionsForNormalize, geminiForNormalize);
 
+    if (!normalizedTranscript || normalizedTranscript.length === 0) {
+      showError(t('errorEmptyTranscript'));
+      showView('idle');
+      setHeaderBadge('Inativo', '');
+      return;
+    }
+
     await chrome.runtime.sendMessage({
       type: 'SAVE_FIELD',
       field: 'normalizedTranscript',
@@ -559,6 +587,13 @@ async function generateFromEndedMeeting(endedMeeting) {
     updateGeneratingStatus('Concluído!', 100);
 
     showMinutes(minutesMarkdown);
+    if (isSalaMode && assemblyTranscript === null && audioChunks?.length > 0) {
+      const banner = document.getElementById('errorBanner');
+      if (banner) {
+        banner.textContent = t('warnAssemblyFallback');
+        banner.style.display = 'block';
+      }
+    }
   } catch (err) {
     showError(friendlyError(err));
     showView('idle');
@@ -798,6 +833,13 @@ chrome.runtime.onMessage.addListener((msg) => {
   if (msg.type === 'CAPTION_WARNING') {
     showError(t('noCaptionsWarning'));
   }
+  if (msg.type === 'AUDIO_PIPELINE_ERROR' && currentView === 'recording') {
+    const banner = document.getElementById('errorBanner');
+    if (banner) {
+      banner.textContent = t('warnAudioUnavailable');
+      banner.style.display = 'block';
+    }
+  }
 });
 
 // ─── Check for existing in-progress meeting ───────────────────────────────────
@@ -922,6 +964,13 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   document.getElementById('footerChangelog')?.addEventListener('click', () => {
     chrome.tabs.create({ url: 'https://github.com/mazinhoww/meetscribe/releases' });
+  });
+
+  // Re-check API key when user saves settings in another tab
+  chrome.storage.onChanged.addListener((changes, area) => {
+    if (area === 'sync' && (changes.geminiApiKey || changes.groqApiKey)) {
+      checkApiKey();
+    }
   });
 
   // i18n: load language and apply to static UI elements

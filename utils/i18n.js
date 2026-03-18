@@ -117,6 +117,18 @@ const messages = {
     // Errors
     noApiKey: 'Nenhuma API key configurada. Acesse as opções da extensão para configurar.',
     noMinutesHistory: 'Esta reunião não tem ata gerada. A ata só está disponível para reuniões encerradas pelo MeetScribe.',
+
+    // Error/warning messages (Sprint 1 fixes)
+    errorEmptyTranscript: 'Nenhuma legenda capturada nesta reunião. Verifique se as legendas estão ativas e tente novamente.',
+    errorGenerationFailed: 'Falha ao gerar a ata. Verifique sua API key e conexão e tente novamente.',
+    errorNoActiveTab: 'Nenhuma aba ativa encontrada.',
+    errorNotOnMeet: 'Acesse uma reunião no Google Meet ou Microsoft Teams para iniciar a transcrição.',
+    warnAudioUnavailable: '⚠️ Captura de áudio indisponível. A ata será gerada apenas a partir das legendas.',
+    warnAssemblyFallback: '⚠️ Identificação de falantes indisponível. Verifique sua chave AssemblyAI nas Configurações.',
+
+    // Default meeting title (used in background.js / recorder.js)
+    defaultMeetingTitle: 'Reunião',
+    overlayActive: 'MeetScribe ativo — gravando transcrição',
   },
 
   'en-US': {
@@ -210,6 +222,18 @@ const messages = {
 
     noApiKey: 'No API key configured. Open extension options to set it up.',
     noMinutesHistory: 'This meeting has no minutes generated. Minutes are only available for meetings ended through MeetScribe.',
+
+    // Error/warning messages (Sprint 1 fixes)
+    errorEmptyTranscript: 'No captions captured in this meeting. Make sure captions are enabled and try again.',
+    errorGenerationFailed: 'Failed to generate minutes. Check your API key and connection and try again.',
+    errorNoActiveTab: 'No active tab found.',
+    errorNotOnMeet: 'Open a meeting in Google Meet or Microsoft Teams to start transcription.',
+    warnAudioUnavailable: '⚠️ Audio capture unavailable. Minutes will be generated from captions only.',
+    warnAssemblyFallback: '⚠️ Speaker identification unavailable. Check your AssemblyAI key in Settings.',
+
+    // Default meeting title
+    defaultMeetingTitle: 'Meeting',
+    overlayActive: 'MeetScribe active — recording transcript',
   },
 
   'es-ES': {
@@ -303,6 +327,18 @@ const messages = {
 
     noApiKey: 'Ninguna API key configurada. Abre las opciones de la extensión para configurarla.',
     noMinutesHistory: 'Esta reunión no tiene acta generada. Las actas solo están disponibles para reuniones finalizadas en MeetScribe.',
+
+    // Error/warning messages (Sprint 1 fixes)
+    errorEmptyTranscript: 'No se capturaron subtítulos en esta reunión. Verifica que los subtítulos estén activos e inténtalo de nuevo.',
+    errorGenerationFailed: 'Error al generar el acta. Verifica tu API key y conexión e inténtalo de nuevo.',
+    errorNoActiveTab: 'No se encontró ninguna pestaña activa.',
+    errorNotOnMeet: 'Abre una reunión en Google Meet o Microsoft Teams para iniciar la transcripción.',
+    warnAudioUnavailable: '⚠️ Captura de audio no disponible. El acta se generará solo a partir de los subtítulos.',
+    warnAssemblyFallback: '⚠️ Identificación de hablantes no disponible. Verifica tu clave AssemblyAI en Configuración.',
+
+    // Default meeting title
+    defaultMeetingTitle: 'Reunión',
+    overlayActive: 'MeetScribe activo — grabando transcripción',
   },
 };
 

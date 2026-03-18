@@ -248,7 +248,7 @@
     `;
     overlayEl.innerHTML = `
       <span style="width:8px;height:8px;border-radius:50%;background:#ff4444;display:inline-block;animation:ms-pulse 1.5s infinite;"></span>
-      MeetScribe ativo — gravando transcrição
+      ${chrome.i18n.getMessage('overlayActive') || 'MeetScribe ativo — gravando transcrição'}
     `;
 
     const style = document.createElement('style');
@@ -312,6 +312,7 @@
       audioProcessor = { recorder, ctx, stream };
     } catch (err) {
       console.warn('[MeetScribe] Audio capture failed (captions only):', err.message);
+      chrome.runtime.sendMessage({ type: 'AUDIO_PIPELINE_ERROR', error: err.message }).catch(() => {});
     }
   }
 
@@ -433,7 +434,7 @@
   window.addEventListener('online', () => {
     if (overlayEl) overlayEl.innerHTML =
       `<span style="width:8px;height:8px;border-radius:50%;background:#ff4444;display:inline-block;animation:ms-pulse 1.5s infinite;"></span>
-       MeetScribe ativo — gravando transcrição`;
+       ${chrome.i18n.getMessage('overlayActive') || 'MeetScribe ativo — gravando transcrição'}`;
     if (audioProcessor?.ctx?.state === 'suspended') {
       audioProcessor.ctx.resume().catch(() => {});
     }

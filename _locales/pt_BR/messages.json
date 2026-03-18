@@ -4,5 +4,8 @@
   },
   "extDescription": {
     "message": "Transcreve reuniões em tempo real e gera atas detalhadas automaticamente usando IA."
+  },
+  "overlayActive": {
+    "message": "MeetScribe ativo — gravando transcrição"
   }
 }

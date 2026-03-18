@@ -4,5 +4,8 @@
   },
   "extDescription": {
     "message": "Transcribes meetings in real time and automatically generates detailed AI-powered meeting minutes."
+  },
+  "overlayActive": {
+    "message": "MeetScribe active — recording transcript"
   }
 }

@@ -209,7 +209,7 @@
     `;
     overlayEl.innerHTML = `
       <span style="width:8px;height:8px;border-radius:50%;background:#ff4444;display:inline-block;animation:meetscribe-pulse 1.5s infinite;"></span>
-      MeetScribe ativo — gravando transcrição
+      ${chrome.i18n.getMessage('overlayActive') || 'MeetScribe ativo — gravando transcrição'}
     `;
 
     const style = document.createElement('style');
@@ -282,6 +282,7 @@
       audioProcessor = { recorder, ctx, stream };
     } catch (err) {
       console.warn('[MeetScribe] Audio capture failed (captions only mode):', err.message);
+      chrome.runtime.sendMessage({ type: 'AUDIO_PIPELINE_ERROR', error: err.message }).catch(() => {});
       // Continue without audio — captions only
     }
   }
@@ -463,7 +464,7 @@
   window.addEventListener('online', () => {
     if (overlayEl) overlayEl.innerHTML =
       `<span style="width:8px;height:8px;border-radius:50%;background:#ff4444;display:inline-block;animation:meetscribe-pulse 1.5s infinite;"></span>
-       MeetScribe ativo — gravando transcrição`;
+       ${chrome.i18n.getMessage('overlayActive') || 'MeetScribe ativo — gravando transcrição'}`;
     // Resume AudioContext if it was suspended
     if (audioProcessor?.ctx?.state === 'suspended') {
       audioProcessor.ctx.resume().catch(() => {});

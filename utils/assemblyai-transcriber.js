@@ -98,7 +98,7 @@ export async function transcribeWithAssemblyAI(audioBlobs) {
       const baseTime = Date.now() - audioDurationMs;
 
       const rawChunks = (result.utterances || []).map((u) => ({
-        speaker: `Falante ${u.speaker}`,
+        speaker: `Falante ${u.speaker.charCodeAt(0) - 64}`,
         text: u.text,
         timestamp: baseTime + u.start,
         durationMs: u.end - u.start,
