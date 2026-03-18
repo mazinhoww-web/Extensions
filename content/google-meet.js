@@ -50,6 +50,7 @@
   let overlayEl = null;
   let audioProcessor = null;
   let meetingStarted = false;
+  let overlayEnabled = true; // cached from showOverlay setting
 
   // ─── Caption latency correction ──────────────────────────────────────────────
   // Tracks when each caption text prefix first appeared in the DOM.
@@ -330,7 +331,11 @@
 
     meetingStarted = true;
     startObserver();
-    showOverlay();
+
+    const { showOverlay: showOverlaySetting = true } = await chrome.storage.sync.get('showOverlay');
+    overlayEnabled = showOverlaySetting !== false;
+    if (overlayEnabled) showOverlay();
+
     scheduleCaptionWarning();
     await startAudioPipeline();
   }
@@ -368,7 +373,7 @@
   let captionCheckInterval = setInterval(() => {
     if (!isActive) return;
     const container = findElement(CONTAINER_SELECTORS);
-    if (container && !overlayEl) showOverlay();
+    if (overlayEnabled && container && !overlayEl) showOverlay();
 
     // Auto-stop: detect when user has left the call (leave button gone from DOM)
     if (!isInActiveCall()) {

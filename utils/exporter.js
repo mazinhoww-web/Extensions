@@ -20,15 +20,7 @@ export function exportPDF(markdownContent, title) {
   const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
   const filename = `ata-reuniao-${dateStamp()}.html`;
 
-  // Use chrome.downloads if available (extension context), otherwise fallback
-  if (typeof chrome !== 'undefined' && chrome.downloads?.download) {
-    const url = URL.createObjectURL(blob);
-    chrome.downloads.download({ url, filename, saveAs: true }, () => {
-      setTimeout(() => URL.revokeObjectURL(url), 5000);
-    });
-  } else {
-    triggerDownload(blob, filename);
-  }
+  triggerDownload(blob, filename);
 }
 
 // ─── Clipboard ────────────────────────────────────────────────────────────────

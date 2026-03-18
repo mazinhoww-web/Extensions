@@ -256,6 +256,13 @@ async function handleMessage(msg, sender) {
       return { success: true };
     }
 
+    case 'DELETE_AUDIO_CHUNKS': {
+      if (msg.meetingId) {
+        await deleteAudioChunks(msg.meetingId).catch(() => {});
+      }
+      return { success: true };
+    }
+
     default:
       return { error: `Unknown message type: ${msg.type}` };
   }

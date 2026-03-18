@@ -462,6 +462,16 @@ async function stopAndGenerate() {
       field: 'minutesMarkdown',
       value: minutesMarkdown,
     });
+
+    // Delete audio chunks if the user enabled "delete audio after generation"
+    const { deleteAudioAfter } = await chrome.storage.sync.get('deleteAudioAfter');
+    if (deleteAudioAfter && (meeting || storedMeeting)?.id) {
+      await chrome.runtime.sendMessage({
+        type: 'DELETE_AUDIO_CHUNKS',
+        meetingId: (meeting || storedMeeting).id,
+      }).catch(() => {});
+    }
+
     updateGeneratingStatus('Concluído!', 100);
 
     showMinutes(minutesMarkdown);
@@ -530,6 +540,16 @@ async function generateFromEndedMeeting(endedMeeting) {
       field: 'minutesMarkdown',
       value: minutesMarkdown,
     });
+
+    // Delete audio chunks if the user enabled "delete audio after generation"
+    const { deleteAudioAfter } = await chrome.storage.sync.get('deleteAudioAfter');
+    if (deleteAudioAfter && endedMeeting?.id) {
+      await chrome.runtime.sendMessage({
+        type: 'DELETE_AUDIO_CHUNKS',
+        meetingId: endedMeeting.id,
+      }).catch(() => {});
+    }
+
     updateGeneratingStatus('Concluído!', 100);
 
     showMinutes(minutesMarkdown);

@@ -54,6 +54,7 @@
   let overlayEl = null;
   let audioProcessor = null;
   let processedEntries = new Set(); // deduplicate by text hash
+  let overlayEnabled = true; // cached from showOverlay setting
 
   // ─── Caption latency correction ──────────────────────────────────────────────
   const captionFirstSeen = new Map();
@@ -338,7 +339,11 @@
     }).catch(() => {});
 
     startObserver();
-    showOverlay();
+
+    const { showOverlay: showOverlaySetting = true } = await chrome.storage.sync.get('showOverlay');
+    overlayEnabled = showOverlaySetting !== false;
+    if (overlayEnabled) showOverlay();
+
     await startAudioPipeline();
   }
 

@@ -267,7 +267,9 @@ async function startAudioPipeline() {
       ? 'audio/webm;codecs=opus'
       : 'audio/webm';
 
-    mediaRecorder = new MediaRecorder(dest.stream, { mimeType, audioBitsPerSecond: 32000 });
+    const { audioQualityHigh = false } = await chrome.storage.sync.get('audioQualityHigh');
+    const audioBitsPerSecond = audioQualityHigh ? 128000 : 32000;
+    mediaRecorder = new MediaRecorder(dest.stream, { mimeType, audioBitsPerSecond });
 
     mediaRecorder.ondataavailable = async (e) => {
       if (e.data?.size > 0) {
@@ -500,6 +502,16 @@ async function generateAta() {
     await chrome.runtime.sendMessage({
       type: 'SAVE_FIELD', field: 'minutesMarkdown', value: minutesMarkdown,
     }).catch(() => {});
+
+    // Delete audio chunks if the user enabled "delete audio after generation"
+    const { deleteAudioAfter } = await chrome.storage.sync.get('deleteAudioAfter');
+    if (deleteAudioAfter && (meeting || stored)?.id) {
+      await chrome.runtime.sendMessage({
+        type: 'DELETE_AUDIO_CHUNKS',
+        meetingId: (meeting || stored).id,
+      }).catch(() => {});
+    }
+
     setGeneratingStatus('Concluído!', 100);
 
     showMinutes(minutesMarkdown);
@@ -511,13 +523,55 @@ async function generateAta() {
   }
 }
 
+// ─── Markdown renderer ────────────────────────────────────────────────────────
+
+function renderMarkdown(md) {
+  if (!md) return '<em style="color:#94a3b8">Sem conteúdo gerado.</em>';
+  // Escape HTML first to prevent XSS from AI-generated content
+  let html = md
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+  // Headers
+  html = html
+    .replace(/^### (.+)$/gm, '<h3>$1</h3>')
+    .replace(/^## (.+)$/gm, '<h2>$1</h2>')
+    .replace(/^# (.+)$/gm, '<h1>$1</h1>');
+  // Bold and italic
+  html = html
+    .replace(/\*\*\*(.+?)\*\*\*/g, '<strong><em>$1</em></strong>')
+    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+    .replace(/\*(.+?)\*/g, '<em>$1</em>');
+  // Horizontal rule
+  html = html.replace(/^---$/gm, '<hr>');
+  // Tables — pipe-delimited lines
+  html = html.replace(/((?:^\|.+\|\n?)+)/gm, (block) => {
+    const rows = block.trim().split('\n').filter((r) => !/^\|[-| :]+\|/.test(r));
+    if (rows.length === 0) return block;
+    const tableRows = rows.map((row, i) => {
+      const cells = row.replace(/^\||\|$/g, '').split('|');
+      const tag = i === 0 ? 'th' : 'td';
+      return `<tr>${cells.map((c) => `<${tag}>${c.trim()}</${tag}>`).join('')}</tr>`;
+    });
+    return `<table>${tableRows.join('')}</table>`;
+  });
+  // List items
+  html = html.replace(/^[-*] (.+)$/gm, '<li>$1</li>');
+  html = html.replace(/(<li>[\s\S]*?<\/li>)(\n<li>[\s\S]*?<\/li>)*/g, (m) => `<ul>${m}</ul>`);
+  // Paragraph breaks
+  html = html.replace(/\n\n+/g, '</p><p>');
+  // Remaining single newlines
+  html = html.replace(/\n/g, '<br>');
+  return `<div>${html}</div>`;
+}
+
 // ─── Show Minutes ─────────────────────────────────────────────────────────────
 
 function showMinutes(markdown) {
   showState('minutes');
   setStatus('Ata Pronta ✓', 'success');
   const el = document.getElementById('minutesContent');
-  if (el) el.textContent = markdown;
+  if (el) el.innerHTML = renderMarkdown(markdown);
 }
 
 // ─── Resume state on page reload ─────────────────────────────────────────────
