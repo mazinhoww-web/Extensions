@@ -117,10 +117,9 @@
     }
 
     const text = (textEl?.textContent || node?.textContent || '').trim();
-    const speaker =
-      (speakerEl?.textContent || '').trim().replace(/:\s*$/, '') ||
-      lastSpeaker ||
-      'Falante';
+    const rawSpeaker = (speakerEl?.textContent || '').trim().replace(/:\s*$/, '');
+    const isValidName = rawSpeaker.length > 1 && !/^\d+[\d\s.,]*$/.test(rawSpeaker);
+    const speaker = (isValidName ? rawSpeaker : '') || lastSpeaker || 'Falante';
 
     return { speaker, text };
   }
@@ -139,10 +138,9 @@
       textEls.forEach((textEl, i) => {
         const text = textEl.textContent.trim();
         const speakerEl = speakerEls[i] || speakerEls[speakerEls.length - 1];
-        const speaker =
-          (speakerEl?.textContent || '').trim().replace(/:\s*$/, '') ||
-          lastSpeaker ||
-          'Falante';
+        const rawSp = (speakerEl?.textContent || '').trim().replace(/:\s*$/, '');
+        const validSp = rawSp.length > 1 && !/^\d+[\d\s.,]*$/.test(rawSp);
+        const speaker = (validSp ? rawSp : '') || lastSpeaker || 'Falante';
 
         processCaption(speaker, text);
       });
@@ -326,6 +324,27 @@
     audioProcessor = null;
   }
 
+  // ─── Auto-enable captions ───────────────────────────────────────────────────
+
+  const CC_BUTTON_SELECTORS = [
+    '[data-tid="toggle-captions"]',
+    '[data-tid="captions-button"]',
+    '[aria-label*="captions"]',
+    '[aria-label*="Captions"]',
+    '[aria-label*="Legendas ao vivo"]',
+    '[aria-label*="Live captions"]',
+    '[aria-label*="Subtítulos en directo"]',
+  ];
+
+  function tryEnableCaptions() {
+    if (findEl(CAPTION_CONTAINER_SELECTORS)) return; // already active
+    const btn = findEl(CC_BUTTON_SELECTORS);
+    if (btn) {
+      btn.click();
+      console.log('[MeetScribe] Auto-enabled captions.');
+    }
+  }
+
   // ─── Activate / Deactivate ──────────────────────────────────────────────────
 
   async function activate() {
@@ -339,6 +358,7 @@
       title: document.title.replace(' | Microsoft Teams', '').trim(),
     }).catch(() => {});
 
+    tryEnableCaptions();
     startObserver();
 
     const { showOverlay: showOverlaySetting = true } = await chrome.storage.sync.get('showOverlay');

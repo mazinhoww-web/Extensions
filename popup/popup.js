@@ -178,11 +178,6 @@ async function detectPlatforms() {
 
     if (onMeet || onTeams) {
       setMode('platform');
-      if (hybridToggle) {
-        hybridToggle.checked = true;
-        const tip = document.getElementById('multilingualTip');
-        if (tip) tip.style.display = 'block';
-      }
     } else {
       // Show empty-state guidance when not on a meeting platform
       showEmptyState();
@@ -874,6 +869,8 @@ async function checkExistingMeeting() {
 // ─── Event listeners ──────────────────────────────────────────────────────────
 
 document.addEventListener('DOMContentLoaded', async () => {
+  showView('idle');
+
   // Mode tabs
   document.querySelectorAll('.mode-tab').forEach((tab) => {
     tab.addEventListener('click', () => setMode(tab.dataset.mode));

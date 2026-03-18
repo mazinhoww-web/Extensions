@@ -15,6 +15,7 @@
 7. [Modo Híbrido (Sala + Remotos)](#modo-híbrido-sala--remotos)
 8. [Exportar a Ata](#exportar-a-ata)
 9. [Solução de Problemas](#solução-de-problemas)
+10. [CWS API Setup (publicação automatizada)](#cws-api-setup-publicação-automatizada)
 
 ---
 
@@ -229,3 +230,109 @@ Clique no botão do formato desejado na tela de resultados.
 Versão atual: **MeetScribe v1.0**
 
 Para dúvidas ou problemas, consulte este guia ou entre em contato com quem compartilhou a extensão.
+
+---
+
+## CWS API Setup (publicação automatizada)
+
+Este guia é para o **desenvolvedor** que quer usar `npm run publish` para publicar
+atualizações diretamente na Chrome Web Store via API, sem acessar o Dashboard manualmente.
+
+### Visão geral do fluxo
+
+```
+npm run publish
+  → bump versão no manifest.json
+  → cria dist/meetscribe-X.Y.Z.zip
+  → git commit + push
+  → upload do ZIP via CWS API
+  → pergunta: "Publicar na CWS agora? (s/N)"
+  → se s: publica (entra em fila de revisão do Google)
+```
+
+### Passo 1 — Criar projeto no Google Cloud Console
+
+1. Acesse **https://console.cloud.google.com**
+2. Clique em **"Selecionar projeto"** → **"Novo projeto"**
+3. Nome: `meetscribe-cws` (ou qualquer nome)
+4. Clique em **"Criar"**
+
+### Passo 2 — Ativar a Chrome Web Store API
+
+1. No projeto criado, vá em **APIs e Serviços → Biblioteca**
+2. Pesquise por `Chrome Web Store API`
+3. Clique na API e depois em **"Ativar"**
+
+### Passo 3 — Criar credenciais OAuth2
+
+1. Vá em **APIs e Serviços → Credenciais**
+2. Clique em **"Criar credenciais" → "ID do cliente OAuth"**
+3. Se solicitado, configure a **Tela de consentimento OAuth**:
+   - Tipo de usuário: **Externo**
+   - Nome do app: `MeetScribe Publisher`
+   - E-mail: seu e-mail de desenvolvedor
+   - Salve e clique em **"Voltar ao painel"**
+4. Volte em **"Criar credenciais" → "ID do cliente OAuth"**
+5. Tipo de aplicativo: **App para computador**
+6. Nome: `meetscribe-publisher`
+7. Clique em **"Criar"**
+8. **Anote o `Client ID` e o `Client Secret`** (você vai precisar deles)
+
+### Passo 4 — Obter o Refresh Token
+
+Execute o seguinte no terminal (substitua `SEU_CLIENT_ID` pelo valor real):
+
+```
+https://accounts.google.com/o/oauth2/auth?client_id=SEU_CLIENT_ID&response_type=code&scope=https://www.googleapis.com/auth/chromewebstore&redirect_uri=urn:ietf:wg:oauth:2.0:oob&access_type=offline
+```
+
+1. Abra essa URL no navegador (logado com a conta do desenvolvedor da CWS)
+2. Autorize o acesso
+3. Copie o **código de autorização** exibido na página
+
+Agora troque o código pelo refresh token (substitua os valores):
+
+```bash
+curl -X POST https://oauth2.googleapis.com/token \
+  -d "code=CODIGO_AQUI" \
+  -d "client_id=SEU_CLIENT_ID" \
+  -d "client_secret=SEU_CLIENT_SECRET" \
+  -d "redirect_uri=urn:ietf:wg:oauth:2.0:oob" \
+  -d "grant_type=authorization_code"
+```
+
+A resposta JSON conterá `"refresh_token": "..."` — **anote esse valor**.
+
+### Passo 5 — Configurar o arquivo .env
+
+Na raiz do projeto, copie `.env.example` para `.env` e preencha:
+
+```bash
+cp .env.example .env
+```
+
+Edite `.env`:
+```
+CWS_EXTENSION_ID=ogcgbfmkdiiffjiihnobeigglaoikpml
+CWS_CLIENT_ID=SEU_CLIENT_ID_AQUI
+CWS_CLIENT_SECRET=SEU_CLIENT_SECRET_AQUI
+CWS_REFRESH_TOKEN=SEU_REFRESH_TOKEN_AQUI
+```
+
+> O `CWS_EXTENSION_ID` é o ID da extensão, visível na URL do Developer Dashboard
+> (ex: `https://chrome.google.com/webstore/devconsole/.../ogcgbfmkdiiffjiihnobeigglaoikpml/...`)
+
+### Passo 6 — Publicar
+
+```bash
+npm run publish
+```
+
+O script vai:
+1. Bumpar a versão (patch) no `manifest.json`
+2. Criar o ZIP em `dist/`
+3. Fazer commit e push no git
+4. Fazer upload do ZIP para a CWS
+5. Perguntar se pode publicar — **responda `s` para publicar ou Enter para deixar como rascunho**
+
+> A revisão do Google geralmente leva de algumas horas a alguns dias.

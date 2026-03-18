@@ -119,7 +119,9 @@
     }
 
     const text = (textEl?.textContent || mutationTarget?.textContent || '').trim();
-    const speaker = (speakerEl?.textContent || '').trim() || lastSpeaker || 'Falante';
+    const rawSpeaker = (speakerEl?.textContent || '').trim();
+    const isValidName = rawSpeaker.length > 1 && !/^\d+[\d\s.,]*$/.test(rawSpeaker);
+    const speaker = (isValidName ? rawSpeaker : '') || lastSpeaker || 'Falante';
 
     return { speaker, text };
   }
@@ -297,6 +299,30 @@
     audioProcessor = null;
   }
 
+  // ─── Auto-enable captions ───────────────────────────────────────────────────
+  // Attempts to click the CC toggle button so the user doesn't need to do it manually.
+
+  const CC_BUTTON_SELECTORS = [
+    '[data-tooltip="Turn on captions"]',
+    '[aria-label="Turn on captions"]',
+    '[data-tooltip="Ativar legendas"]',
+    '[aria-label="Ativar legendas"]',
+    '[data-tooltip="Activar subtítulos"]',
+    '[aria-label="Activar subtítulos"]',
+    '[data-tooltip="Activer les sous-titres"]',
+    '[aria-label="Activer les sous-titres"]',
+    '[jsname="r8qRAd"]',
+  ];
+
+  function tryEnableCaptions() {
+    if (findElement(CONTAINER_SELECTORS)) return; // already active
+    const btn = findElement(CC_BUTTON_SELECTORS);
+    if (btn) {
+      btn.click();
+      console.log('[MeetScribe] Auto-enabled captions.');
+    }
+  }
+
   // ─── No-caption warning after 30 seconds ────────────────────────────────────
 
   let captionWarnTimeout = null;
@@ -331,6 +357,7 @@
     }).catch(() => {});
 
     meetingStarted = true;
+    tryEnableCaptions();
     startObserver();
 
     const { showOverlay: showOverlaySetting = true } = await chrome.storage.sync.get('showOverlay');
